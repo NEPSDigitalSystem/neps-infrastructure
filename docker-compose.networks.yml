@@ -1,0 +1,33 @@
+version: '3.8'
+
+networks:
+  # Public-facing services
+  neps-public:
+    driver: bridge
+    internal: false
+  
+  # Internal service communication
+  neps-internal:
+    driver: bridge
+    internal: true  # No external access
+  
+  # Database network — most restricted
+  neps-database:
+    driver: bridge
+    internal: true
+
+services:
+  nginx:
+    networks:
+      - neps-public
+      - neps-internal
+
+  neps-backend:
+    networks:
+      - neps-internal
+      - neps-database
+  
+  postgres:
+    networks:
+      - neps-database
+    # NOT accessible from public network
