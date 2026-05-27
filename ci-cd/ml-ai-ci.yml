@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: neps-digital/neps-ml-ai
+  IMAGE_NAME: nepsdigitalsystem/neps-ml-ai
 
 jobs:
   test:

@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: neps-digital/neps-backend
+  IMAGE_NAME: nepsdigitalsystem/neps-backend
 
 jobs:
   test:

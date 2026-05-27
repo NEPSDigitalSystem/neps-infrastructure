@@ -18,4 +18,4 @@ Before the workflows will run successfully, an organization admin must configure
 - `GHCR_PAT`: A Personal Access Token (or specific GitHub Token) with `write:packages` permission to push to the GitHub Container Registry (`ghcr.io`).
 
 ## 🐳 Container Registry
-All images are built and pushed to `ghcr.io/neps-digital/[repo-name]`.
+All images are built and pushed to `ghcr.io/nepsdigitalsystem/[repo-name]`.
