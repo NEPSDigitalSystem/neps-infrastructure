@@ -3,15 +3,21 @@ version: '3.8'
 services:
   # ─── Frontend ───
   neps-portal:
-    image: nginx:alpine
-    # build:
-    #   context: ../neps-portal
-    #   dockerfile: Dockerfile
+    build:
+      context: ../neps-portal
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - AUTH_SECRET=neps-dev-secret-change-in-production-32chars-min
+      - NEXTAUTH_URL=http://localhost:3000
+    volumes:
+      - ../neps-portal:/app
+      - /app/node_modules
+      - /app/.next
     networks:
       - neps-network
     depends_on:
@@ -35,6 +41,11 @@ services:
       - redis
     networks:
       - neps-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # ─── ML/AI ───
   neps-ml-ai:
