@@ -1,0 +1,19 @@
+version: '3.8'
+
+# NEPS Digital — Rollback configuration for SHA-based deployments
+# This file is used by rollback.sh to restart services with a specific IMAGE_TAG
+
+services:
+  neps-portal:
+    image: ghcr.io/nepsdigitalsystem/neps-portal:${IMAGE_TAG:-latest}
+    # During rollback, we use the pre-built image instead of build context
+    build: !reset 
+
+  neps-backend:
+    image: ghcr.io/nepsdigitalsystem/neps-backend:${IMAGE_TAG:-latest}
+
+  neps-ml-ai:
+    image: ghcr.io/nepsdigitalsystem/neps-ml-ai:${IMAGE_TAG:-latest}
+
+  neps-data-platform:
+    image: ghcr.io/nepsdigitalsystem/neps-data-platform:${IMAGE_TAG:-latest}
