@@ -70,3 +70,14 @@ All microservices communicate across the restricted `neps-internal` bridge. Only
 ### Nginx Edge Security & HTTPS
 - **TLS Termination**: Enforced on port 443 with a 301 redirect from port 80.
 - **Security Headers**: CSP, HSTS, and X-Frame-Options are set at the edge.
+
+---
+
+## 🛠️ 4. Maintenance & Scaling
+
+### Adding a New Microservice
+1. **Docker Compose**: Add the service block to `docker-compose.yml`.
+2. **Networking**: Ensure it is connected to `neps-internal`.
+3. **Metrics**: Expose a `/metrics` endpoint (see `monitoring/SERVICE_METRICS_GUIDE.md`).
+4. **Nginx**: Add a new `location` block in `nginx/nginx.conf` to route traffic.
+5. **CI/CD**: Copy the `ci-cd.yml` template from `neps-infrastructure` and configure repo secrets (`GHCR_PAT`, etc.).
