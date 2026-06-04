@@ -111,7 +111,10 @@ services:
       - postgres_password
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/pitr-setup.sh:/docker-entrypoint-initdb.d/pitr-setup.sh
+      - ./scripts/pitr-setup.sh:/docker-entrypoint-initdb.d/pitr-setup.sh:ro
+      - ./backups/pitr:/backup/pitr
+      - ./scripts:/backup/scripts:ro
+    command: ["postgres", "-c", "config_file=/var/lib/postgresql/data/postgresql.conf", "-c", "include_if_exists=/etc/postgresql/postgresql.conf.d/pitr.conf"]
     ports:
       - "5432:5432"
     networks:
@@ -254,6 +257,37 @@ services:
       - neps-data-platform
     networks:
       - neps-public
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
+
+  # ─── Resilience & Backups ───
+  ofelia:
+    image: mcuadros/ofelia:latest
+    depends_on:
+      - postgres
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/ofelia/config.ini:/etc/ofelia/config.ini:ro
+    command: daemon --config /etc/ofelia/config.ini
+    networks:
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/app_secret_key
+    secrets:
+      - app_secret_key
+    volumes:
+      - ./backups/minio:/data
+    command: server /data --console-address ":9001"
+    networks:
       - neps-internal
     security_opt:
       - no-new-privileges:true
