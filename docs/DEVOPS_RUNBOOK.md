@@ -43,14 +43,15 @@ Unlike standard web applications, the NEPS ecosystem requires aggressive monitor
 2. **Infrastructure Layer:** `node-exporter` tracks raw host CPU/Memory, while `postgres-exporter` tracks dead tuples and DB connections.
 3. **Scraping Mechanism:** The central `prometheus` container executes a pull-based scrape against all internal Docker DNS targets (`neps-backend:8000`, `redis:6379`) every 15 seconds.
 
-### Centralized Dashboards (Grafana)
-Grafana sits on port `3001` and connects directly to Prometheus and PostgreSQL as continuous data sources. It is automatically provisioned with the `neps-overview.json` schema on boot, eliminating manual dashboard creation.
-- **Key Visuals:** REDCap Sync Failure Rates, Memory Usage across ML Containers, Live User Logins, and API rate-limit drops.
+### Centralized Dashboards & Logging (Grafana)
+Grafana sits on port `3001` and connects directly to Prometheus and Loki as continuous data sources. It is automatically provisioned on boot.
+- **Metrics**: Query Prometheus for service performance.
+- **Logs**: Query Loki for real-time container logs across the whole stack.
 
-### Automated Alerting (AlertManager & Rules)
-Defined heavily in `monitoring/rules/neps-alerts.yml`.
-- **Infrastructure Alerts:** Triggers operations pages if CPU/Memory surpasses 90% (`MemoryHigh`), if Docker Containers crash (`ServiceDown`), or if endpoints shoot over 5% failure rates (`HighErrorRate`).
-- **Safeguarding Crisis Alerts:** The backend exposes `neps_safeguarding_alerts`. If the analytics/ML models determine a High-Risk crisis for a user (e.g., severe depressive intent identified from inputs), it fires an immediate `Severity: Critical` webhook directly to the administrative healthcare team.
+### Automated Alerting (Alertmanager & Rules)
+Defined heavily in `monitoring/rules/neps-alerts.yml` and handled by the `alertmanager` service.
+- **Infrastructure Alerts**: Triggers if CPU/Memory surpasses threshold, if services are down, or if error rates spike.
+- **Safeguarding Crisis Alerts**: P0 alerts for psychological distress identified by ML models.
 
 ---
 
@@ -58,18 +59,14 @@ Defined heavily in `monitoring/rules/neps-alerts.yml`.
 
 The infrastructure adheres to the **"Defense in Depth"** methodology.
 
-### Zero-Trust Docker Networking (`docker-compose.networks.yml`)
-The Nginx inverse proxy is the ONLY container accessible from the host (`neps-public`). 
-All microservices communicate across a restricted internal bridge (`neps-internal`). 
-The `postgres` and `redis` instances are segmented completely into a non-routable `neps-database` subnet resulting in true network-layer isolation.
+### Zero-Trust Networking
+All microservices communicate across the restricted `neps-internal` bridge. Only Nginx is exposed publicly.
 
-### Container Immutability & Hardening (`docker-compose.security.yml`)
-- All Python APIs use the customized `hardened-base.Dockerfile`. They run entirely under a unprivileged `neps` (UID 1000) user.
-- Root shell access is physically deleted from the container. 
-- Containers are launched with `read_only: true`, meaning an attacker cannot download malware payloads or edit scripts even if an RCE vulnerability exists. Temporary file writes are restricted to `tmpfs` RAM-disks marked explicitly as `noexec, nosuid`.
-- Privilege escalation is disabled via the `no-new-privileges: true` Docker security mapping.
-- All Docker Linux capabilities (`cap_drop: ALL`) are stripped, retaining only `NET_BIND_SERVICE`.
+### Container Hardening
+- **no-new-privileges**: Enforced on all containers to prevent privilege escalation.
+- **Non-Root Processes**: All application processes run as unprivileged users (`nextjs`, `neps`).
+- **Image Scanning**: Trivy scans images in CI/CD before they reach GHCR.
 
-### Nginx Edge Security
-- **Rate Limiting:** IP-level throttling using `limit_req_zone` ensures standard APIs handle `10 req/sec` while Auth routes are heavily restricted to `1 req/sec` to prevent brute force.
-- **Header Hardening:** Forces `X-Frame-Options` and strict Content Security Policies preventing cross-site scripting attacks at the edge before hitting the API mesh.
+### Nginx Edge Security & HTTPS
+- **TLS Termination**: Enforced on port 443 with a 301 redirect from port 80.
+- **Security Headers**: CSP, HSTS, and X-Frame-Options are set at the edge.
