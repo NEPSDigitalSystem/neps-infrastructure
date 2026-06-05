@@ -1,112 +1,74 @@
 {
-  "dashboard": {
-    "title": "NEPS Digital — System Overview",
-    "tags": ["neps", "production"],
-    "timezone": "UTC",
-    "schemaVersion": 36,
-    
-    "panels": [
-      {
-        "id": 1,
-        "title": "🔴 Safeguarding Alerts (Real-time)",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
-        "targets": [{
-          "expr": "neps_safeguarding_alerts",
-          "format": "table",
-          "instant": true
-        }],
-        "fieldConfig": {
-          "overrides": [{
-            "matcher": {"id": "byName", "options": "severity"},
-            "properties": [{
-              "id": "custom.displayMode",
-              "value": "color-background"
-            }]
-          }]
-        }
-      },
-      {
-        "id": 2,
-        "title": "Service Health Status",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
-        "targets": [{
-          "expr": "up{job=~\"neps-.*\"}",
-          "legendFormat": "{{job}}"
-        }],
-        "options": {
-          "colorMode": "background",
-          "graphMode": "none"
-        }
-      },
-      {
-        "id": 3,
-        "title": "API Request Rate",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 8},
-        "targets": [
-          {
-            "expr": "rate(http_requests_total{job=\"neps-backend\"}[5m])",
-            "legendFormat": "{{method}} {{handler}}"
-          }
-        ]
-      },
-      {
-        "id": 4,
-        "title": "Database Connections",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
-        "targets": [{
-          "expr": "pg_stat_activity_count",
-          "legendFormat": "Active connections"
+  "id": null,
+  "uid": "neps-overview",
+  "title": "NEPS Digital — System Overview",
+  "tags": ["neps", "production"],
+  "timezone": "UTC",
+  "schemaVersion": 36,
+  "panels": [
+    {
+      "id": 1,
+      "title": "🔴 Safeguarding Alerts (Real-time)",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "targets": [{"expr": "neps_safeguarding_alerts", "format": "table", "instant": true}],
+      "fieldConfig": {
+        "overrides": [{
+          "matcher": {"id": "byName", "options": "severity"},
+          "properties": [{"id": "custom.displayMode", "value": "color-background"}]
         }]
-      },
-      {
-        "id": 5,
-        "title": "REDCap Sync Status",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
-        "targets": [{
-          "expr": "time() - neps_redcap_last_sync_timestamp",
-          "legendFormat": "Seconds since last sync"
-        }]
-      },
-      {
-        "id": 6,
-        "title": "ML Model Performance",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
-        "targets": [
-          {
-            "expr": "ml_model_accuracy",
-            "legendFormat": "Accuracy"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(ml_prediction_duration_seconds_bucket[5m]))",
-            "legendFormat": "P95 Latency"
-          }
-        ]
-      },
-      {
-        "id": 7,
-        "title": "System Resources",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
-        "targets": [
-          {
-            "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
-            "legendFormat": "CPU %"
-          },
-          {
-            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
-            "legendFormat": "Memory %"
-          }
-        ]
       }
-    ],
-    
-    "time": {"from": "now-1h", "to": "now"},
-    "refresh": "5s"
-  }
+    },
+    {
+      "id": 2,
+      "title": "Service Health Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+      "targets": [{"expr": "up{job=~\"neps-.*\"}", "legendFormat": "{{job}}"}],
+      "options": {"colorMode": "background", "graphMode": "none"}
+    },
+    {
+      "id": 3,
+      "title": "API Request Rate",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 6, "y": 8},
+      "targets": [{"expr": "rate(http_requests_total{job=\"neps-backend\"}[5m])", "legendFormat": "{{method}} {{handler}}"}]
+    },
+    {
+      "id": 4,
+      "title": "Database Connections",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [{"expr": "pg_stat_activity_count", "legendFormat": "Active connections"}]
+    },
+    {
+      "id": 5,
+      "title": "REDCap Sync Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
+      "targets": [{"expr": "time() - neps_redcap_last_sync_timestamp", "legendFormat": "Seconds since last sync"}]
+    },
+    {
+      "id": 6,
+      "title": "ML Model Performance",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "targets": [
+        {"expr": "ml_model_accuracy", "legendFormat": "Accuracy"},
+        {"expr": "histogram_quantile(0.95, rate(ml_prediction_duration_seconds_bucket[5m]))", "legendFormat": "P95 Latency"}
+      ]
+    },
+    {
+      "id": 7,
+      "title": "System Resources",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "targets": [
+        {"expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "CPU %"},
+        {"expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "legendFormat": "Memory %"}
+      ]
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "5s"
 }

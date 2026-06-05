@@ -31,6 +31,11 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
+      # Blank the base file's POSTGRES_PASSWORD so it doesn't collide with
+      # POSTGRES_PASSWORD_FILE — postgres treats "both set" as a fatal error.
+      # An explicit empty string reads as "unset" for the entrypoint's
+      # exclusivity check; the secret file then becomes authoritative.
+      POSTGRES_PASSWORD: ""
       # Never use default passwords in production
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     secrets:

@@ -1,0 +1,22 @@
+global:
+  resolve_timeout: 5m
+
+# Routing tree: everything funnels to the webhook-logger sink for now.
+route:
+  receiver: 'webhook-logger'
+  group_by: ['alertname', 'severity']
+  group_wait: 30s        # wait to batch the first alerts in a group
+  group_interval: 5m     # wait before adding new alerts to an existing group
+  repeat_interval: 4h    # re-send an unresolved alert at most this often
+
+receivers:
+  - name: 'webhook-logger'
+    webhook_configs:
+      - url: 'http://webhook-logger:8080/'
+        send_resolved: true
+
+# Suppress warning-level noise when a critical alert for the same alertname fires.
+inhibit_rules:
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: ['alertname']

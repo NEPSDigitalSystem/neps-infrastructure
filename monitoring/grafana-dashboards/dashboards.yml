@@ -1,0 +1,12 @@
+apiVersion: 1
+providers:
+  - name: 'neps-dashboards'
+    orgId: 1
+    folder: 'NEPS'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
