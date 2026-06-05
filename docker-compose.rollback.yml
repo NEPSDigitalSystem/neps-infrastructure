@@ -1,59 +1,33 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # NEPS Digital — Rollback overlay  (docker-compose.rollback.yml)
 #
-# PURPOSE
-#   Pin all four app services to a specific, previously-built image version so a
-#   bad deploy can be rolled back to a known-good one.
+# Pins all four app services to a specific GHCR image version.
 #
-# HOW IT IS USED  (see scripts/rollback.sh)
-#       export IMAGE_TAG=<target-sha>
-#       docker-compose -f docker-compose.yml -f docker-compose.rollback.yml up -d
-#   The target version is passed in through the IMAGE_TAG environment variable
-#   and substituted into each image reference below. IMAGE_TAG is required — the
-#   `:?` guard makes Compose fail loudly rather than build an invalid `…:` ref.
+# Usage (see scripts/rollback.sh):
+#   export IMAGE_TAG=<target-sha>
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  -f docker-compose.rollback.yml up -d
 #
-# ⚠️  CURRENTLY INERT — THIS CANNOT PERFORM A REAL ROLLBACK YET.
-#   The base docker-compose.yml does NOT run versioned GHCR images:
-#     • neps-backend / neps-ml-ai / neps-data-platform run `python:3.11-slim`
-#       HTTP stubs (`python -m http.server 8000`), and
-#     • neps-portal runs a LOCAL source build with dev bind-mounts.
-#   So applying this overlay swaps stubs/local-build → real GHCR images, which is
-#   a SUBSTITUTION, not a rollback to a prior version. This file is correct and
-#   ready, but stays inert until the base consumes IMAGE_TAG-pinned GHCR images
-#   for all four services. See docs/rollback-setup.md.
+# On production/staging servers always include docker-compose.prod.yml so the
+# base stack is not building from local source or running HTTP stubs.
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
-  # ─── Frontend (local dev build in the base) ───
   neps-portal:
     image: ghcr.io/nepsdigitalsystem/neps-portal:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
-    # Drop the base service's local `build:` so the registry image is PULLED
-    # rather than rebuilt from ../neps-portal source.
     build: !reset null
-    # GOTCHA — portal bind-mount shadowing.
-    # The base mounts `../neps-portal:/app` (+ anonymous /app/node_modules and
-    # /app/.next). Compose APPENDS overlay volume lists, so a plain `volumes: []`
-    # would NOT remove them — the host source would shadow the image's /app and
-    # you'd run dev code instead of the rolled-back image. `!override []` forces
-    # the volume list to be REPLACED with empty, so the image's own /app is used.
+    # Replace dev bind-mounts so the rolled-back image's /app is used.
     volumes: !override []
 
-  # ─── Backend (stub in the base) ───
   neps-backend:
     image: ghcr.io/nepsdigitalsystem/neps-backend:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
-    # GOTCHA — stub command carryover.
-    # The base sets `command: python -m http.server 8000` to fake the service.
-    # `command:` is replaced (not merged) by an overlay, but ONLY if the overlay
-    # sets it — otherwise the stub command would run INSIDE the real image.
-    # `!reset null` removes the override so the image's own ENTRYPOINT/CMD runs.
+    build: !reset null
     command: !reset null
 
-  # ─── ML/AI (stub in the base) ───
   neps-ml-ai:
     image: ghcr.io/nepsdigitalsystem/neps-ml-ai:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
-    command: !reset null   # remove base http.server stub; run image default
+    command: !reset null
 
-  # ─── Data Platform (stub in the base) ───
   neps-data-platform:
     image: ghcr.io/nepsdigitalsystem/neps-data-platform:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
-    command: !reset null   # remove base http.server stub; run image default
+    command: !reset null

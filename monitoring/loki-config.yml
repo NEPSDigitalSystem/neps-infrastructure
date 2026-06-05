@@ -3,10 +3,8 @@ auth_enabled: false
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
-  log_level: info
 
 common:
-  instance_addr: 127.0.0.1
   path_prefix: /loki
   storage:
     filesystem:
@@ -17,19 +15,37 @@ common:
     kvstore:
       store: inmemory
 
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
 schema_config:
   configs:
-    - from: 2020-10-24
-      store: boltdb-shipper      # rock-solid default for the 2.9 line
+    # Loki 3.x: use tsdb store + v13 schema (boltdb-shipper/v11 are deprecated)
+    - from: 2024-01-01
+      store: tsdb
       object_store: filesystem
-      schema: v11
+      schema: v13
       index:
         prefix: index_
         period: 24h
 
 limits_config:
+  allow_structured_metadata: true
   reject_old_samples: true
   reject_old_samples_max_age: 168h
+  # Allow ingestion of logs from containers across the stack
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+
+chunk_store_config:
+  chunk_cache_config:
+    embedded_cache:
+      enabled: true
+      max_size_mb: 100
 
 ruler:
   alertmanager_url: http://alertmanager:9093

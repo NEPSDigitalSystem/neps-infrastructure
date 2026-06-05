@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-BACKUP_DIR="/backup/pitr"
+BACKUP_DIR="./backups/pitr"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RETENTION_DAYS=30
 
@@ -13,11 +13,12 @@ echo "==================================================="
 # Base backup (daily at 2 AM)
 if [ "${1:-}" = "full" ] || [ "$(date +%H)" = "02" ]; then
     echo "[FULL] Creating base backup..."
+    docker-compose exec -T postgres rm -rf /tmp/base_backup
     docker-compose exec -T postgres pg_basebackup \
         -D /tmp/base_backup \
-        -Ft -z -P -W
+        -Ft -z -P -U neps
     
-    docker cp $(docker-compose ps -q postgres):/tmp/base_backup.tar.gz \
+    docker cp $(docker-compose ps -q postgres):/tmp/base_backup/base.tar.gz \
         "$BACKUP_DIR/base/base_$TIMESTAMP.tar.gz"
     
     # Cleanup old base backups

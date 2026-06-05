@@ -7,48 +7,44 @@ This repository (`neps-infrastructure`) is the central nervous system of the NEP
 ## 🛠️ Technology Stack
 
 - **Containerization & Orchestration:** Docker, Docker Compose
-- **Web Server / Reverse Proxy:** Nginx
-- **Database layer:** PostgreSQL (with automated PITR)
-- **Monitoring & Observability:** Prometheus (Metrics), Grafana (Dashboards)
-- **CI/CD:** GitHub Actions, GitHub Container Registry (GHCR)
-- **Scripting:** Bash & PowerShell
+- **Web Server / Reverse Proxy:** Nginx (with HTTPS & Security Headers)
+- **Database layer:** PostgreSQL 15 (with automated PITR)
+- **Monitoring & Observability:** Prometheus (Metrics), Grafana (Visualization), Loki (Logs), Alertmanager (Alerting)
+- **Security:** Trivy (Image Scanning), Docker Secrets, GHCR
+- **CI/CD:** GitHub Actions, Dependabot
 
 ---
 
 ## 🏗️ Architecture & How It Works
 
-This repository ties the entire NEPS Digital ecosystem together using Docker Compose as our **Configuration as Code**. Instead of running services individually, `neps-infrastructure` defines how they securely communicate.
+The `neps-infrastructure` repository serves as the unified orchestration layer.
 
-- **`docker-compose.yml`**: Defines the base orchestration for the core microservices.
-- **`docker-compose.networks.yml`**: Segments the system into three tiers:
-  1. `neps-public`: Accessible from the outside relative to the Nginx reverse proxy.
-  2. `neps-internal`: Backend and ML APIs communicating privately without public exposure.
-  3. `neps-database`: Fully isolated network exclusively for the PostgreSQL backend.
+- **`docker-compose.yml`**: The single source of truth for the entire stack.
+- **Networks**: Segments the system into three tiers:
+  1. `neps-public`: Only the Nginx proxy (Ports 80, 443).
+  2. `neps-internal`: Backend, ML, and Data services.
+  3. `neps-database`: Fully isolated for PostgreSQL.
+- **`nginx/`**: Handles TLS termination and routing.
 
 ---
 
 ## 🔐 Security Mechanisms
 
-Security is built-in following the Principle of Least Privilege:
-1. **Hardened Base Images** (`hardened-base.Dockerfile`): All Python microservices use a customized, stripped-down Debian-slim container. It runs as a non-root user (`neps`), Drops all privileges, and disables shell access (`/sbin/nologin`).
-2. **Container Overlays** (`docker-compose.security.yml`):
-   - `read_only: true`: All containers run with immutable filesystems.
-   - `no-new-privileges: true`: Prevents privilege escalation.
-   - Resource limits (CPU/Memory) prevent Denial of Service (DoS) attacks.
-3. **Automated Secrets** (`scripts/setup-secrets.sh`): Auto-generates cryptographic keys and database passwords for Docker to mount securely into `/run/secrets/`.
+1. **HTTPS/TLS**: Nginx enforces SSL and security headers (CSP, HSTS).
+2. **Secrets Management**: Sensitive data (DB passwords, Auth secrets) are wired via **Docker Secrets** (`/run/secrets/`), avoiding plain-text environment variables.
+3. **Hardened Containers**: 
+   - All services run with `no-new-privileges: true`.
+   - Applications run as non-root users (`nextjs` for portal, `python` for backend).
+4. **CI/CD Scanning**: Every PR triggers a **Trivy security scan** before deployment.
 
 ---
 
-## 📈 Monitoring, Alerting, & Dashboards
+## 📈 Monitoring & Observability
 
-We utilize an enterprise-grade observability stack:
-- **Prometheus**: Automatically scrapes metrics from `/metrics` endpoints across the ecosystem every 15 seconds.
-- **Critical Alerts** (`neps-alerts.yml`): AlertManager is configured to trigger on:
-  - High error rates or service downtime.
-  - Resource exhaustion (CPU/Disk/Memory).
-  - Data Pipeline failures or Database Replication lags.
-  - **Safeguarding Crisis Alerts**: Real-time psychological distress alerts trigger P0 operations.
-- **Grafana**: A centralized System Overview Dashboard providing visual insight into REDCap synchronization latency, database connections, and ML model accuracy.
+- **Prometheus**: Scrapes metrics from `/metrics` endpoints.
+- **Loki & Promtail**: Centralized log aggregation for all containers.
+- **Alertmanager**: Handles critical alerts (defined in `monitoring/rules/`).
+- **Grafana**: Automatically provisioned with datasources and the "NEPS Overview" dashboard.
 
 ---
 
@@ -69,8 +65,18 @@ The NEPS pipeline emphasizes automation from code push to deployment:
 ---
 
 ### Quick Start
-To bootstrap the entire infrastructure locally or on a production server:
+
+**Local development** (builds from source, ML/data stubs):
 ```bash
 ./scripts/setup-secrets.sh
-docker-compose -f docker-compose.yml -f docker-compose.networks.yml -f docker-compose.security.yml up -d
+docker compose up -d
 ```
+
+**Production / staging** (pulls versioned images from GHCR):
+```bash
+./scripts/setup-secrets.sh
+export IMAGE_TAG=latest   # or a specific git SHA
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+**Rollback** to a prior deploy: `./scripts/rollback.sh previous` — see `docs/rollback-setup.md`.

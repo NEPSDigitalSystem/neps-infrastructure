@@ -7,9 +7,7 @@ BASE_BACKUP="$PITR_DIR/base"
 
 mkdir -p $WAL_ARCHIVE $BASE_BACKUP
 
-# PostgreSQL configuration for PITR
-mkdir -p postgres
-cat > postgres/postgresql.pitr.conf << 'EOF'
+cat >> /var/lib/postgresql/data/postgresql.conf << 'EOF'
 # WAL Archiving for PITR
 wal_level = replica
 archive_mode = on
@@ -19,8 +17,8 @@ max_wal_size = 1GB
 min_wal_size = 80MB
 
 # Recovery settings (used during restore)
-recovery_target_time = ''  # Set during PITR
+# recovery_target_time = ''  # Set during PITR
 recovery_target_action = 'promote'
 EOF
 
-echo "PITR configuration created. Add to docker-compose volumes."
+echo "PITR configuration applied to postgresql.conf"

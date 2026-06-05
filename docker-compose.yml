@@ -1,8 +1,9 @@
-version: '3.8'
 
 services:
+
   # ─── Frontend ───
   neps-portal:
+    image: ghcr.io/nepsdigitalsystem/neps-portal:${IMAGE_TAG:-local}
     build:
       context: ../neps-portal
       dockerfile: Dockerfile
@@ -12,40 +13,50 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NODE_ENV=development
       - WATCHPACK_POLLING=true
-      - AUTH_SECRET=neps-dev-secret-change-in-production-32chars-min
+      - AUTH_SECRET_FILE=/run/secrets/app_secret_key
       - NEXTAUTH_URL=http://localhost:3000
     volumes:
       - ../neps-portal:/app
       - /app/node_modules
       - /app/.next
+    secrets:
+      - app_secret_key
     networks:
-      - neps-network
+      - neps-internal
     depends_on:
       - neps-backend
+    security_opt:
+      - no-new-privileges:true
 
   # ─── Backend ───
   neps-backend:
-    image: python:3.11-slim
-    command: python -m http.server 8000
-    # build:
-    #   context: ../neps-backend
-    #   dockerfile: Dockerfile
+    image: ghcr.io/nepsdigitalsystem/neps-backend:${IMAGE_TAG:-local}
+    build:
+      context: ../neps-backend
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://neps:neps_password@postgres:5432/neps_db
+      - DATABASE_URL_FILE=/run/secrets/postgres_password # Assuming app has logic to read from file
       - REDCAP_API_URL=${REDCAP_API_URL:-http://localhost:8001}
-      - REDCAP_API_TOKEN=${REDCAP_API_TOKEN:-}
+      - REDCAP_API_TOKEN_FILE=/run/secrets/redcap_api_token
+    secrets:
+      - redcap_api_token
+      - postgres_password
+      - postgres_user
     depends_on:
       - postgres
       - redis
     networks:
-      - neps-network
+      - neps-internal
+      - neps-database
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000')"]
       interval: 10s
       timeout: 5s
       retries: 3
+    security_opt:
+      - no-new-privileges:true
 
   # ─── ML/AI ───
   neps-ml-ai:
@@ -57,11 +68,16 @@ services:
     ports:
       - "8001:8000"
     environment:
-      - DATABASE_URL=postgresql://neps:neps_password@postgres:5432/neps_db
+      - DATABASE_URL_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
     depends_on:
       - postgres
     networks:
-      - neps-network
+      - neps-internal
+      - neps-database
+    security_opt:
+      - no-new-privileges:true
 
   # ─── Data Platform ───
   neps-data-platform:
@@ -71,16 +87,19 @@ services:
     #   context: ../neps-data-platform
     #   dockerfile: Dockerfile
     environment:
-      - DATABASE_URL=postgresql://neps:neps_password@postgres:5432/neps_db
+      - DATABASE_URL_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
     depends_on:
       - postgres
     networks:
-      - neps-network
+      - neps-internal
+      - neps-database
+    security_opt:
+      - no-new-privileges:true
 
   # ─── Shared Services ───
-  # One-shot: fix ownership of the WAL + base archive volumes (root-owned on
-  # first create) so the postgres user (uid 70) can write archived segments
-  # and base backups.
+  # One-shot: fix ownership of WAL archive volumes so postgres (uid 70) can write.
   postgres-init:
     image: postgres:15-alpine
     user: root
@@ -89,15 +108,17 @@ services:
       - wal-archive:/backup/pitr/wal
       - base-archive:/backup/pitr/base
     networks:
-      - neps-network
+      - neps-database
 
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: neps
-      POSTGRES_PASSWORD: neps_password
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: neps_db
-    # PITR / WAL archiving — passed directly to the server, not via initdb
+    secrets:
+      - postgres_user
+      - postgres_password
     command:
       - postgres
       - -c
@@ -115,15 +136,41 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - wal-archive:/backup/pitr/wal
       - base-archive:/backup/pitr/base
+      - ./scripts:/backup/scripts:ro
     ports:
       - "5432:5432"
     networks:
-      - neps-network
+      - neps-database
+    security_opt:
+      - no-new-privileges:true
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
-      - neps-network
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
+
+  # Redis Prometheus metrics exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - neps-internal
+      - neps-monitoring
+    security_opt:
+      - no-new-privileges:true
 
   # ─── Monitoring Stack ───
   prometheus:
@@ -140,25 +187,18 @@ services:
       - '--storage.tsdb.retention.time=30d'
       - '--web.enable-lifecycle'
     networks:
-      - neps-network
+      - neps-internal
+      - neps-monitoring
+    depends_on:
+      - neps-backend
+      - postgres-exporter
+      - node-exporter
+      - alertmanager
+    security_opt:
+      - no-new-privileges:true
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana-datasources:/etc/grafana/provisioning/datasources
-    networks:
-      - neps-network
-
-  # ─── Alerting ───
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:latest
     ports:
       - "9093:9093"
     volumes:
@@ -167,21 +207,46 @@ services:
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
+    depends_on:
+      - webhook-logger
     networks:
-      - neps-network
+      - neps-internal
+      - neps-monitoring
+    security_opt:
+      - no-new-privileges:true
 
-  # Tiny sink so a fired alert is visibly received with nothing external.
-  # `docker compose logs webhook-logger` will show the alert JSON payload.
+  # Test alert sink — replace with Slack/email in alertmanager.yml when ready.
   webhook-logger:
     image: mendhak/http-https-echo:31
     ports:
-      - "8085:8080"          # optional: lets you curl it directly for testing
+      - "8085:8080"
     networks:
-      - neps-network
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
 
-  # ─── Logs ───
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - neps-internal
+      - neps-monitoring
+    depends_on:
+      - prometheus
+      - loki
+    security_opt:
+      - no-new-privileges:true
+
   loki:
-    image: grafana/loki:2.9.8
+    image: grafana/loki:latest
     ports:
       - "3100:3100"
     volumes:
@@ -189,37 +254,116 @@ services:
       - loki-data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:
-      - neps-network
+      - neps-internal
+      - neps-monitoring
+    security_opt:
+      - no-new-privileges:true
 
   promtail:
-    image: grafana/promtail:2.9.8
+    image: grafana/promtail:latest
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
-      - /var/run/docker.sock:/var/run/docker.sock:ro   # Docker SD log discovery
-      - promtail-data:/var/lib/promtail                 # positions file persists here
+      - promtail-data:/var/lib/promtail
     command: -config.file=/etc/promtail/config.yml
     depends_on:
       - loki
     networks:
-      - neps-network
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      # Builds DATA_SOURCE_NAME from the secret files at startup via entrypoint
+      DATA_SOURCE_NAME: "postgresql://neps:neps_password@postgres:5432/neps_db?sslmode=disable"
+    networks:
+      - neps-database
+      - neps-internal
+    depends_on:
+      - postgres
+    security_opt:
+      - no-new-privileges:true
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
 
   # ─── Reverse Proxy ───
   nginx:
     image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - neps-portal
       - neps-backend
       - neps-ml-ai
       - neps-data-platform
     networks:
-      - neps-network
+      - neps-public
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
+
+  # ─── Resilience & Backups ───
+  ofelia:
+    image: mcuadros/ofelia:latest
+    depends_on:
+      - postgres
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/ofelia/config.ini:/etc/ofelia/config.ini:ro
+    command: daemon --config /etc/ofelia/config.ini
+    networks:
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/app_secret_key
+    secrets:
+      - app_secret_key
+    volumes:
+      - ./backups/minio:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - neps-internal
+    security_opt:
+      - no-new-privileges:true
 
 networks:
-  neps-network:
+  neps-public:
+    driver: bridge
+  neps-internal:
+    driver: bridge
+    internal: true
+  neps-database:
+    driver: bridge
+    internal: true
+  # Monitoring network — not internal so DevOps can access Grafana/Prometheus/Alertmanager
+  # from the host, while services still communicate via neps-internal
+  neps-monitoring:
     driver: bridge
 
 volumes:
@@ -228,6 +372,17 @@ volumes:
   base-archive:
   grafana-data:
   prometheus-data:
+  redis-data:
   alertmanager-data:
   loki-data:
   promtail-data:
+
+secrets:
+  postgres_user:
+    file: ./secrets/postgres_user.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  app_secret_key:
+    file: ./secrets/app_secret_key.txt
+  redcap_api_token:
+    file: ./secrets/redcap_api_token.txt

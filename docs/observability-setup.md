@@ -1,4 +1,4 @@
-# Observability Setup — Alertmanager + Loki + Promtail
+﻿# Observability Setup ΓÇö Alertmanager + Loki + Promtail
 
 Adds alert delivery and centralized logging to the existing
 Prometheus/Grafana monitoring stack in the canonical
@@ -10,16 +10,16 @@ Prometheus/Grafana monitoring stack in the canonical
 
 Two end-to-end pipelines now exist:
 
-**Metrics → alerts**
+**Metrics ΓåÆ alerts**
 ```
-app /metrics → Prometheus (scrape + rule eval) → Alertmanager → receiver (webhook-logger)
+app /metrics ΓåÆ Prometheus (scrape + rule eval) ΓåÆ Alertmanager ΓåÆ receiver (webhook-logger)
 ```
 Prometheus scrapes targets, evaluates the alert rules, and forwards firing
 alerts to Alertmanager, which routes them to a receiver.
 
 **Logs**
 ```
-container stdout/stderr → Promtail (Docker SD) → Loki → Grafana (Explore / dashboards)
+container stdout/stderr ΓåÆ Promtail (Docker SD) ΓåÆ Loki ΓåÆ Grafana (Explore / dashboards)
 ```
 Promtail discovers containers via the Docker socket, ships their logs to Loki,
 and Grafana queries Loki as a datasource.
@@ -36,12 +36,12 @@ Prometheus was **already alerting-ready** before this task:
 - `monitoring/prometheus.yml` had a live `alerting:` block pointing at
   `alertmanager:9093`.
 - `rule_files: /etc/prometheus/rules/*.yml` loaded `monitoring/rules/neps-alerts.yml`
-  — **7 alert rules** (`SafeguardingCrisisAlert`, `ServiceDown`, `PostgreSQLDown`,
+  ΓÇö **7 alert rules** (`SafeguardingCrisisAlert`, `ServiceDown`, `PostgreSQLDown`,
   `REDCapSyncFailure`, `HighErrorRate`, `DiskSpaceCritical`, `MemoryHigh`).
 
 The gap: **there was no Alertmanager to send to.** Prometheus was evaluating
 rules and trying to reach a host that didn't exist. This task added that host
-(plus a receiver), so **no Prometheus config changes were needed** — adding a
+(plus a receiver), so **no Prometheus config changes were needed** ΓÇö adding a
 service named `alertmanager` on `9093`/`neps-network` completed the wiring.
 
 ---
@@ -53,17 +53,17 @@ service named `alertmanager` on `9093`/`neps-network` completed the wiring.
 | `alertmanager` | `prom/alertmanager:v0.27.0` | Receives alerts from Prometheus, routes to receivers; data on `alertmanager-data` volume |
 | `loki` | `grafana/loki:2.9.8` | Log store + query API on `:3100`; data on `loki-data` volume |
 | `promtail` | `grafana/promtail:2.9.8` | Tails container logs via Docker SD, pushes to Loki; positions on `promtail-data` |
-| `webhook-logger` | `mendhak/http-https-echo:31` | Test sink — logs every received alert payload to stdout |
+| `webhook-logger` | `mendhak/http-https-echo:31` | Test sink ΓÇö logs every received alert payload to stdout |
 
 ### Why versions are pinned (and locked)
 
-- **No `:latest`** on the new services — reproducible boots, no surprise breakage
+- **No `:latest`** on the new services ΓÇö reproducible boots, no surprise breakage
   on image refresh.
 - **Loki and Promtail are version-locked to `2.9.8` (identical).** The Loki push
   API and config schema evolve together across releases; a Promtail/Loki version
   skew can cause push errors or rejected payloads. Keep them bumped in lockstep.
 - **Loki config matches 2.9.** `monitoring/loki-config.yml` uses
-  `boltdb-shipper` + schema `v11` — the rock-solid default for the 2.9 line. Loki
+  `boltdb-shipper` + schema `v11` ΓÇö the rock-solid default for the 2.9 line. Loki
   **3.x changed the schema** (requires `tsdb` + `v13`, different structured-metadata
   semantics); bumping the image without rewriting the config will fail to boot.
 
@@ -94,7 +94,7 @@ Two provisioning issues were fixed alongside the new services:
 
    The grafana service now mounts this dir at
    `/etc/grafana/provisioning/datasources`. This **also closes a pre-existing
-   gap**: Prometheus had never been provisioned as a datasource — it previously
+   gap**: Prometheus had never been provisioned as a datasource ΓÇö it previously
    had to be added by hand in the UI.
 
 2. **Dashboard provider fixed.** The dashboards mount had a dashboard JSON but
@@ -102,8 +102,8 @@ Two provisioning issues were fixed alongside the new services:
    `monitoring/grafana-dashboards/dashboards.yml` (`apiVersion: 1` + `providers:`)
    pointing at `/etc/grafana/provisioning/dashboards`.
 
-3. **Dashboard reshaped (API-import → bare model).** `neps-overview.json` was in
-   API-import shape (`{"dashboard": {…}}`), which file-provisioning rejects. It was
+3. **Dashboard reshaped (API-import ΓåÆ bare model).** `neps-overview.json` was in
+   API-import shape (`{"dashboard": {ΓÇª}}`), which file-provisioning rejects. It was
    unwrapped to the **bare dashboard model** at the top level, with `"id": null` and
    `"uid": "neps-overview"` added. The original was preserved as
    `neps-overview.json.apiform.bak`.
@@ -115,7 +115,7 @@ Two provisioning issues were fixed alongside the new services:
 > Bring up the new services first:
 > `docker compose -f docker-compose.yml -f docker-compose.networks.yml -f docker-compose.security.yml up -d alertmanager webhook-logger loki promtail`
 
-**1. Alert delivery — synthetic alert (independent of real metrics).**
+**1. Alert delivery ΓÇö synthetic alert (independent of real metrics).**
 Post a fake alert straight to Alertmanager and watch the sink receive it:
 ```bash
 curl -XPOST http://localhost:9093/api/v2/alerts -H 'Content-Type: application/json' -d '[
@@ -123,23 +123,23 @@ curl -XPOST http://localhost:9093/api/v2/alerts -H 'Content-Type: application/js
    "annotations":{"summary":"synthetic alert"}}
 ]'
 
-docker compose logs webhook-logger        # → shows the alert JSON payload
+docker compose logs webhook-logger        # ΓåÆ shows the alert JSON payload
 ```
 Success = the `webhook-logger` container logs the POSTed alert body. This proves
-the Alertmanager → receiver hop without needing any metric to fire.
+the Alertmanager ΓåÆ receiver hop without needing any metric to fire.
 
-**2. Logs — Loki has labels.**
+**2. Logs ΓÇö Loki has labels.**
 After Promtail has been running a minute:
 ```bash
-curl -s 'http://localhost:3100/loki/api/v1/labels'        # → includes "container", "compose_service"
+curl -s 'http://localhost:3100/loki/api/v1/labels'        # ΓåÆ includes "container", "compose_service"
 curl -s 'http://localhost:3100/loki/api/v1/label/compose_service/values'
 ```
 Success = Loki returns the relabeled label set, confirming Promtail discovered
 containers and pushed logs.
 
-**3. Grafana — datasources auto-present.**
-Open Grafana (`http://localhost:3001`) → Connections → Data sources. Both
-**Prometheus** (default) and **Loki** appear with no manual setup; Explore →
+**3. Grafana ΓÇö datasources auto-present.**
+Open Grafana (`http://localhost:3001`) ΓåÆ Connections ΓåÆ Data sources. Both
+**Prometheus** (default) and **Loki** appear with no manual setup; Explore ΓåÆ
 Loki can query `{compose_project="neps-infrastructure"}`.
 
 ---
@@ -147,11 +147,11 @@ Loki can query `{compose_project="neps-infrastructure"}`.
 ## macOS / Docker Desktop note
 
 Promtail uses **Docker service discovery via the socket**
-(`docker_sd_configs` → `unix:///var/run/docker.sock`), **not** the
+(`docker_sd_configs` ΓåÆ `unix:///var/run/docker.sock`), **not** the
 `/var/lib/docker/containers/*-json.log` file-tail approach.
 
 Reason: on **Docker Desktop for Mac**, the daemon runs inside a LinuxKit VM, and
-`/var/lib/docker/containers` exists only *inside that VM* — bind-mounting it is
+`/var/lib/docker/containers` exists only *inside that VM* ΓÇö bind-mounting it is
 fragile and version-dependent. The Docker socket, by contrast, is reliably
 forwarded into containers on Docker Desktop, and SD reads logs through the Docker
 **API** (path-independent) while also attaching rich container/compose labels.
@@ -176,4 +176,4 @@ socket with a socket-proxy rather than mounting it directly.)
   be pinned to specific versions for reproducibility (separate task).
 - **Deployment target undecided.** Whether the observability stack runs on the
   same box as the app services or a separate host is **pending supervisor
-  decision** — affects the Promtail socket-access model and resource sizing.
+  decision** ΓÇö affects the Promtail socket-access model and resource sizing.

@@ -5,8 +5,8 @@ set -euo pipefail
 # Usage: ./pitr-restore.sh "2026-05-27 14:30:15"
 
 TARGET_TIME="${1:-}"
-BACKUP_DIR="/backup/pitr"
-RECOVERY_DIR="/backup/pitr/recovery"
+BACKUP_DIR="./backups/pitr"
+RECOVERY_DIR="./backups/pitr/recovery"
 
 if [ -z "$TARGET_TIME" ]; then
     echo "Usage: $0 \"YYYY-MM-DD HH:MM:SS\""
@@ -41,9 +41,10 @@ echo "Using base backup: $LATEST_BASE"
 echo "[4/6] Extracting base backup..."
 tar -xzf "$BACKUP_DIR/base/$LATEST_BASE" -C $RECOVERY_DIR
 
-# Create recovery configuration
+# Create recovery configuration (PostgreSQL 15+ style)
 echo "[5/6] Configuring recovery to $TARGET_TIME..."
-cat > $RECOVERY_DIR/recovery.conf << EOF
+touch $RECOVERY_DIR/recovery.signal
+cat > $RECOVERY_DIR/postgresql.auto.conf << EOF
 restore_command = 'cp /backup/pitr/wal/%f %p'
 recovery_target_time = '$TARGET_TIME'
 recovery_target_action = 'promote'
@@ -52,11 +53,12 @@ EOF
 
 # Backup current data and replace with recovery
 echo "[6/6] Starting PostgreSQL in recovery mode..."
+# Note: Using the default compose project name prefix
 docker run --rm \
-    -v neps_postgres-data:/var/lib/postgresql/data \
-    -v $RECOVERY_DIR:/recovery \
+    -v neps-infrastructure_postgres-data:/var/lib/postgresql/data \
+    -v $(realpath $RECOVERY_DIR):/recovery \
     postgres:15-alpine \
-    bash -c "cp -r /recovery/* /var/lib/postgresql/data/"
+    sh -c "rm -rf /var/lib/postgresql/data/* && cp -r /recovery/* /var/lib/postgresql/data/ && chown -R postgres:postgres /var/lib/postgresql/data/"
 
 # Start PostgreSQL — it will automatically recover to target time
 docker-compose up -d postgres
