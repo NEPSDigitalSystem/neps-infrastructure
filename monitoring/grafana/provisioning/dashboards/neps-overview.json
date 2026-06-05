@@ -1,112 +1,232 @@
 {
-  "dashboard": {
-    "title": "NEPS Digital — System Overview",
-    "tags": ["neps", "production"],
-    "timezone": "UTC",
-    "schemaVersion": 36,
-    
-    "panels": [
-      {
-        "id": 1,
-        "title": "🔴 Safeguarding Alerts (Real-time)",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
-        "targets": [{
-          "expr": "neps_safeguarding_alerts",
-          "format": "table",
-          "instant": true
-        }],
-        "fieldConfig": {
-          "overrides": [{
-            "matcher": {"id": "byName", "options": "severity"},
-            "properties": [{
-              "id": "custom.displayMode",
-              "value": "color-background"
-            }]
+  "uid": "neps-system-overview",
+  "title": "NEPS Digital — System Overview",
+  "tags": ["neps", "production"],
+  "timezone": "UTC",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {"from": "now-1h", "to": "now"},
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+
+  "panels": [
+    {
+      "id": 1,
+      "title": "🔴 Safeguarding Alerts (Real-time)",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{
+        "expr": "neps_safeguarding_alerts",
+        "format": "table",
+        "instant": true,
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [{
+          "matcher": {"id": "byName", "options": "severity"},
+          "properties": [{
+            "id": "custom.displayMode",
+            "value": "color-background"
           }]
-        }
-      },
-      {
-        "id": 2,
-        "title": "Service Health Status",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
-        "targets": [{
-          "expr": "up{job=~\"neps-.*\"}",
-          "legendFormat": "{{job}}"
-        }],
-        "options": {
-          "colorMode": "background",
-          "graphMode": "none"
-        }
-      },
-      {
-        "id": 3,
-        "title": "API Request Rate",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 8},
-        "targets": [
-          {
-            "expr": "rate(http_requests_total{job=\"neps-backend\"}[5m])",
-            "legendFormat": "{{method}} {{handler}}"
-          }
-        ]
-      },
-      {
-        "id": 4,
-        "title": "Database Connections",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
-        "targets": [{
-          "expr": "pg_stat_activity_count",
-          "legendFormat": "Active connections"
         }]
-      },
-      {
-        "id": 5,
-        "title": "REDCap Sync Status",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
-        "targets": [{
-          "expr": "time() - neps_redcap_last_sync_timestamp",
-          "legendFormat": "Seconds since last sync"
-        }]
-      },
-      {
-        "id": 6,
-        "title": "ML Model Performance",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
-        "targets": [
-          {
-            "expr": "ml_model_accuracy",
-            "legendFormat": "Accuracy"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(ml_prediction_duration_seconds_bucket[5m]))",
-            "legendFormat": "P95 Latency"
-          }
-        ]
-      },
-      {
-        "id": 7,
-        "title": "System Resources",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
-        "targets": [
-          {
-            "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
-            "legendFormat": "CPU %"
-          },
-          {
-            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
-            "legendFormat": "Memory %"
-          }
-        ]
       }
-    ],
-    
-    "time": {"from": "now-1h", "to": "now"},
-    "refresh": "5s"
-  }
+    },
+    {
+      "id": 2,
+      "title": "Service Health",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{
+        "expr": "up{job=~\"neps-.*\"}",
+        "legendFormat": "{{job}}",
+        "refId": "A"
+      }],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}}},
+            {"type": "value", "options": {"1": {"text": "UP", "color": "green"}}}
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "API Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"neps-backend\"}[5m])",
+          "legendFormat": "{{method}} {{handler}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "reqps"},
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Database Connections",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{
+        "expr": "pg_stat_activity_count",
+        "legendFormat": "Active connections",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "REDCap Sync Lag (seconds)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{
+        "expr": "time() - neps_redcap_last_sync_timestamp",
+        "legendFormat": "Seconds since last sync",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 300},
+              {"color": "red", "value": 900}
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "ML Model Performance",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "ml_model_accuracy",
+          "legendFormat": "Accuracy",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(ml_prediction_duration_seconds_bucket[5m]))",
+          "legendFormat": "P95 Latency (s)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "System Resources",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "CPU %",
+          "refId": "A"
+        },
+        {
+          "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+          "legendFormat": "Memory %",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "percent", "min": 0, "max": 100},
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "title": "HTTP Error Rate (%)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{
+        "expr": "100 * rate(http_requests_total{job=\"neps-backend\", status=~\"5..\"}[5m]) / rate(http_requests_total{job=\"neps-backend\"}[5m])",
+        "legendFormat": "Backend 5xx rate",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "Disk Usage",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{
+        "expr": "100 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"} * 100)",
+        "legendFormat": "Disk used %",
+        "refId": "A"
+      }],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 75},
+              {"color": "red", "value": 90}
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ]
 }

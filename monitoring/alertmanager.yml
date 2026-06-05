@@ -1,17 +1,58 @@
 global:
   resolve_timeout: 5m
 
+# Routing tree — critical alerts fire immediately, warnings are grouped
 route:
   group_by: ['alertname', 'cluster', 'service']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
-  receiver: 'default-receiver'
+  receiver: 'null-receiver'
 
+  routes:
+    # Critical safeguarding alerts — notify immediately with no grouping delay
+    - match:
+        severity: critical
+        team: safeguarding
+      group_wait: 0s
+      receiver: 'null-receiver'
+
+    # All other critical alerts
+    - match:
+        severity: critical
+      receiver: 'null-receiver'
+
+    # Warnings go to default with standard grouping
+    - match:
+        severity: warning
+      receiver: 'null-receiver'
+
+# ─── Receivers ───────────────────────────────────────────────────────────────
 receivers:
-  - name: 'default-receiver'
-    # Placeholder for Slack/Email/PagerDuty
-    # example:
+  # Default no-op receiver — alertmanager requires at least one valid receiver.
+  # Replace with Slack/email/PagerDuty when ready.
+  - name: 'null-receiver'
+    # To add Slack, uncomment and fill in your webhook URL:
     # slack_configs:
-    #   - api_url: 'https://hooks.slack.com/services/...'
-    #     channel: '#alerts'
+    #   - api_url: 'https://hooks.slack.com/services/T.../B.../xxx'
+    #     channel: '#neps-alerts'
+    #     title: '{{ template "slack.default.title" . }}'
+    #     text: '{{ template "slack.default.text" . }}'
+    #     send_resolved: true
+    #
+    # To add email:
+    # email_configs:
+    #   - to: 'devops@nepsdigital.org'
+    #     from: 'alerts@nepsdigital.org'
+    #     smarthost: 'smtp.example.com:587'
+    #     auth_username: '$EMAIL_USER'
+    #     auth_password: '$EMAIL_PASSWORD'
+    #     send_resolved: true
+
+inhibit_rules:
+  # If a service is down, suppress all its downstream warnings
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['job', 'instance']

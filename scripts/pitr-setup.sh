@@ -7,11 +7,7 @@ BASE_BACKUP="$PITR_DIR/base"
 
 mkdir -p $WAL_ARCHIVE $BASE_BACKUP
 
-# PostgreSQL configuration for PITR
-PITR_CONF="/etc/postgresql/postgresql.conf.d/pitr.conf"
-mkdir -p $(dirname $PITR_CONF)
-
-cat > $PITR_CONF << 'EOF'
+cat >> /var/lib/postgresql/data/postgresql.conf << 'EOF'
 # WAL Archiving for PITR
 wal_level = replica
 archive_mode = on
@@ -25,4 +21,4 @@ min_wal_size = 80MB
 recovery_target_action = 'promote'
 EOF
 
-echo "PITR configuration created at $PITR_CONF"
+echo "PITR configuration applied to postgresql.conf"

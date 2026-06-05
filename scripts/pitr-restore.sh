@@ -5,8 +5,8 @@ set -euo pipefail
 # Usage: ./pitr-restore.sh "2026-05-27 14:30:15"
 
 TARGET_TIME="${1:-}"
-BACKUP_DIR="/backup/pitr"
-RECOVERY_DIR="/backup/pitr/recovery"
+BACKUP_DIR="./backups/pitr"
+RECOVERY_DIR="./backups/pitr/recovery"
 
 if [ -z "$TARGET_TIME" ]; then
     echo "Usage: $0 \"YYYY-MM-DD HH:MM:SS\""

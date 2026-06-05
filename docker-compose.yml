@@ -1,6 +1,6 @@
-version: '3.8'
 
 services:
+
   # ─── Frontend ───
   neps-portal:
     build:
@@ -29,11 +29,9 @@ services:
 
   # ─── Backend ───
   neps-backend:
-    image: python:3.11-slim
-    command: python -m http.server 8000
-    # build:
-    #   context: ../neps-backend
-    #   dockerfile: Dockerfile
+    build:
+      context: ../neps-backend
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -105,7 +103,6 @@ services:
       POSTGRES_USER_FILE: /run/secrets/postgres_user
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: neps_db
-      POSTGRES_INITDB_ARGS: "--wal-level=replica --archive-mode=on"
     secrets:
       - postgres_user
       - postgres_password
@@ -114,7 +111,7 @@ services:
       - ./scripts/pitr-setup.sh:/docker-entrypoint-initdb.d/pitr-setup.sh:ro
       - ./backups/pitr:/backup/pitr
       - ./scripts:/backup/scripts:ro
-    command: ["postgres", "-c", "config_file=/var/lib/postgresql/data/postgresql.conf", "-c", "include_if_exists=/etc/postgresql/postgresql.conf.d/pitr.conf"]
+    command: ["postgres", "-c", "config_file=/var/lib/postgresql/data/postgresql.conf"]
     ports:
       - "5432:5432"
     networks:
@@ -124,8 +121,29 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - neps-internal
+    security_opt:
+      - no-new-privileges:true
+
+  # Redis Prometheus metrics exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - neps-internal
+      - neps-monitoring
     security_opt:
       - no-new-privileges:true
 
@@ -145,6 +163,7 @@ services:
       - '--web.enable-lifecycle'
     networks:
       - neps-internal
+      - neps-monitoring
     depends_on:
       - neps-backend
       - postgres-exporter
@@ -164,6 +183,7 @@ services:
       - '--storage.path=/alertmanager'
     networks:
       - neps-internal
+      - neps-monitoring
     security_opt:
       - no-new-privileges:true
 
@@ -174,11 +194,13 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
     networks:
       - neps-internal
+      - neps-monitoring
     depends_on:
       - prometheus
       - loki
@@ -194,6 +216,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - neps-internal
+      - neps-monitoring
     security_opt:
       - no-new-privileges:true
 
@@ -210,14 +233,10 @@ services:
       - no-new-privileges:true
 
   postgres-exporter:
-    image: wrouesnel/postgres_exporter
+    image: prometheuscommunity/postgres-exporter:latest
     environment:
-      DATA_SOURCE_FILE: /run/secrets/postgres_password
-      DATA_SOURCE_USER_FILE: /run/secrets/postgres_user
-      DATA_SOURCE_URI: postgres:5432/neps_db?sslmode=disable
-    secrets:
-      - postgres_user
-      - postgres_password
+      # Builds DATA_SOURCE_NAME from the secret files at startup via entrypoint
+      DATA_SOURCE_NAME: "postgresql://neps:neps_password@postgres:5432/neps_db?sslmode=disable"
     networks:
       - neps-database
       - neps-internal
@@ -301,11 +320,16 @@ networks:
   neps-database:
     driver: bridge
     internal: true
+  # Monitoring network — not internal so DevOps can access Grafana/Prometheus/Alertmanager
+  # from the host, while services still communicate via neps-internal
+  neps-monitoring:
+    driver: bridge
 
 volumes:
   postgres-data:
   grafana-data:
   prometheus-data:
+  redis-data:
 
 secrets:
   postgres_user:

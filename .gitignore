@@ -216,3 +216,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- NEPS Infrastructure Security-critical exclusions ---
+# SSL private keys - NEVER commit private keys to git
+nginx/ssl/*.key
+nginx/ssl/*.pem
+
+# Database backups - large files, may contain sensitive patient data
+backups/
+
+# Deployment history state files
+.deployment-history/
+
+# Local secret files - Docker mounts these at runtime
+secrets/*.txt
+!secrets/.gitkeep
