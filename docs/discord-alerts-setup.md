@@ -19,7 +19,7 @@ cp secrets/discord_webhook_url.example secrets/discord_webhook_url.txt
 
 ## 3. Start with Discord routing
 
-**Local / staging:**
+**Local / staging** (webhook saved in `secrets/discord_webhook_url.txt`):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.discord-alerts.yml up -d
