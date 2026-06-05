@@ -1,58 +1,45 @@
 global:
   resolve_timeout: 5m
 
-# Routing tree — critical alerts fire immediately, warnings are grouped
+# Default: webhook-logger sink (visible via `docker compose logs webhook-logger`).
+# Replace webhook_configs with Slack/email when credentials are available.
 route:
   group_by: ['alertname', 'cluster', 'service']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
-  receiver: 'null-receiver'
+  receiver: 'webhook-logger'
 
   routes:
-    # Critical safeguarding alerts — notify immediately with no grouping delay
-    - match:
-        severity: critical
-        team: safeguarding
+    # Safeguarding alerts — notify immediately
+    - matchers:
+        - severity="critical"
+        - team="safeguarding"
       group_wait: 0s
-      receiver: 'null-receiver'
+      receiver: 'webhook-logger'
 
-    # All other critical alerts
-    - match:
-        severity: critical
-      receiver: 'null-receiver'
+    - matchers:
+        - severity="critical"
+      receiver: 'webhook-logger'
 
-    # Warnings go to default with standard grouping
-    - match:
-        severity: warning
-      receiver: 'null-receiver'
+    - matchers:
+        - severity="warning"
+      receiver: 'webhook-logger'
 
-# ─── Receivers ───────────────────────────────────────────────────────────────
 receivers:
-  # Default no-op receiver — alertmanager requires at least one valid receiver.
-  # Replace with Slack/email/PagerDuty when ready.
-  - name: 'null-receiver'
-    # To add Slack, uncomment and fill in your webhook URL:
-    # slack_configs:
-    #   - api_url: 'https://hooks.slack.com/services/T.../B.../xxx'
-    #     channel: '#neps-alerts'
-    #     title: '{{ template "slack.default.title" . }}'
-    #     text: '{{ template "slack.default.text" . }}'
-    #     send_resolved: true
-    #
-    # To add email:
-    # email_configs:
-    #   - to: 'devops@nepsdigital.org'
-    #     from: 'alerts@nepsdigital.org'
-    #     smarthost: 'smtp.example.com:587'
-    #     auth_username: '$EMAIL_USER'
-    #     auth_password: '$EMAIL_PASSWORD'
-    #     send_resolved: true
+  - name: 'webhook-logger'
+    webhook_configs:
+      - url: 'http://webhook-logger:8080/'
+        send_resolved: true
+
+  # Uncomment when Slack webhook is provisioned:
+  # - name: 'slack-alerts'
+  #   slack_configs:
+  #     - api_url: 'https://hooks.slack.com/services/T.../B.../xxx'
+  #       channel: '#neps-alerts'
+  #       send_resolved: true
 
 inhibit_rules:
-  # If a service is down, suppress all its downstream warnings
-  - source_match:
-      severity: 'critical'
-    target_match:
-      severity: 'warning'
-    equal: ['job', 'instance']
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: ['alertname', 'job']

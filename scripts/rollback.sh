@@ -103,7 +103,7 @@ if [ "$ENVIRONMENT" = "previous" ] || [ "$ENVIRONMENT" = "specific-sha" ]; then
     log "Starting rollback services with target images..."
     TARGET_SHA=${TARGET_SHA:-$(get_previous_sha)}
     export IMAGE_TAG=$TARGET_SHA
-    docker-compose -f docker-compose.yml -f docker-compose.rollback.yml up -d
+    docker-compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.rollback.yml up -d
     
     # Verify health
     sleep 5

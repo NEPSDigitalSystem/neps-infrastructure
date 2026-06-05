@@ -3,6 +3,7 @@ services:
 
   # ─── Frontend ───
   neps-portal:
+    image: ghcr.io/nepsdigitalsystem/neps-portal:${IMAGE_TAG:-local}
     build:
       context: ../neps-portal
       dockerfile: Dockerfile
@@ -29,6 +30,7 @@ services:
 
   # ─── Backend ───
   neps-backend:
+    image: ghcr.io/nepsdigitalsystem/neps-backend:${IMAGE_TAG:-local}
     build:
       context: ../neps-backend
       dockerfile: Dockerfile
@@ -97,6 +99,17 @@ services:
       - no-new-privileges:true
 
   # ─── Shared Services ───
+  # One-shot: fix ownership of WAL archive volumes so postgres (uid 70) can write.
+  postgres-init:
+    image: postgres:15-alpine
+    user: root
+    command: chown -R 70:70 /backup/pitr/wal /backup/pitr/base
+    volumes:
+      - wal-archive:/backup/pitr/wal
+      - base-archive:/backup/pitr/base
+    networks:
+      - neps-database
+
   postgres:
     image: postgres:15-alpine
     environment:
@@ -106,12 +119,24 @@ services:
     secrets:
       - postgres_user
       - postgres_password
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - "archive_command=test ! -f /backup/pitr/wal/%f && cp %p /backup/pitr/wal/%f"
+      - -c
+      - archive_timeout=60
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/pitr-setup.sh:/docker-entrypoint-initdb.d/pitr-setup.sh:ro
-      - ./backups/pitr:/backup/pitr
+      - wal-archive:/backup/pitr/wal
+      - base-archive:/backup/pitr/base
       - ./scripts:/backup/scripts:ro
-    command: ["postgres", "-c", "config_file=/var/lib/postgresql/data/postgresql.conf"]
     ports:
       - "5432:5432"
     networks:
@@ -178,12 +203,25 @@ services:
       - "9093:9093"
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager-data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
+    depends_on:
+      - webhook-logger
     networks:
       - neps-internal
       - neps-monitoring
+    security_opt:
+      - no-new-privileges:true
+
+  # Test alert sink — replace with Slack/email in alertmanager.yml when ready.
+  webhook-logger:
+    image: mendhak/http-https-echo:31
+    ports:
+      - "8085:8080"
+    networks:
+      - neps-internal
     security_opt:
       - no-new-privileges:true
 
@@ -213,6 +251,7 @@ services:
       - "3100:3100"
     volumes:
       - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - neps-internal
@@ -223,10 +262,12 @@ services:
   promtail:
     image: grafana/promtail:latest
     volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+      - promtail-data:/var/lib/promtail
     command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
     networks:
       - neps-internal
     security_opt:
@@ -327,9 +368,14 @@ networks:
 
 volumes:
   postgres-data:
+  wal-archive:
+  base-archive:
   grafana-data:
   prometheus-data:
   redis-data:
+  alertmanager-data:
+  loki-data:
+  promtail-data:
 
 secrets:
   postgres_user:

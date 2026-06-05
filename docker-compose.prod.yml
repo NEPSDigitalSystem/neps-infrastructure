@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEPS Digital — Production / Staging overlay  (docker-compose.prod.yml)
+#
+# Use on deploy servers that pull pre-built images from GHCR instead of building
+# from local source. Keeps local-dev stubs in the base compose for engineers.
+#
+# Usage:
+#   export IMAGE_TAG=<git-sha-or-latest>
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  neps-portal:
+    image: ghcr.io/nepsdigitalsystem/neps-portal:${IMAGE_TAG:-latest}
+    build: !reset null
+    volumes: !override []
+    environment:
+      - NODE_ENV=production
+      - WATCHPACK_POLLING=
+
+  neps-backend:
+    image: ghcr.io/nepsdigitalsystem/neps-backend:${IMAGE_TAG:-latest}
+    build: !reset null
+
+  neps-ml-ai:
+    image: ghcr.io/nepsdigitalsystem/neps-ml-ai:${IMAGE_TAG:-latest}
+    command: !reset null
+
+  neps-data-platform:
+    image: ghcr.io/nepsdigitalsystem/neps-data-platform:${IMAGE_TAG:-latest}
+    command: !reset null

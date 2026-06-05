@@ -65,8 +65,18 @@ The NEPS pipeline emphasizes automation from code push to deployment:
 ---
 
 ### Quick Start
-To bootstrap the entire infrastructure locally or on a production server:
+
+**Local development** (builds from source, ML/data stubs):
 ```bash
 ./scripts/setup-secrets.sh
-docker-compose -f docker-compose.yml -f docker-compose.networks.yml -f docker-compose.security.yml up -d
+docker compose up -d
 ```
+
+**Production / staging** (pulls versioned images from GHCR):
+```bash
+./scripts/setup-secrets.sh
+export IMAGE_TAG=latest   # or a specific git SHA
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+**Rollback** to a prior deploy: `./scripts/rollback.sh previous` — see `docs/rollback-setup.md`.

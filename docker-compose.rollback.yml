@@ -1,26 +1,33 @@
-version: '3.8'
-
-# This overlay is used by scripts/rollback.sh to force the environment back to 
-# known stable image tags or to override health checks during recovery.
+# ─────────────────────────────────────────────────────────────────────────────
+# NEPS Digital — Rollback overlay  (docker-compose.rollback.yml)
+#
+# Pins all four app services to a specific GHCR image version.
+#
+# Usage (see scripts/rollback.sh):
+#   export IMAGE_TAG=<target-sha>
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  -f docker-compose.rollback.yml up -d
+#
+# On production/staging servers always include docker-compose.prod.yml so the
+# base stack is not building from local source or running HTTP stubs.
+# ─────────────────────────────────────────────────────────────────────────────
 
 services:
   neps-portal:
-    image: ${STABLE_PORTAL_IMAGE:-ghcr.io/nepsdigitalsystem/neps-portal:latest}
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        order: start-first
+    image: ghcr.io/nepsdigitalsystem/neps-portal:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
+    build: !reset null
+    # Replace dev bind-mounts so the rolled-back image's /app is used.
+    volumes: !override []
 
   neps-backend:
-    image: ${STABLE_BACKEND_IMAGE:-ghcr.io/nepsdigitalsystem/neps-backend:latest}
-    healthcheck:
-      # Loosen health check for faster recovery switch
-      interval: 5s
-      retries: 5
+    image: ghcr.io/nepsdigitalsystem/neps-backend:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
+    build: !reset null
+    command: !reset null
 
   neps-ml-ai:
-    image: ${STABLE_ML_IMAGE:-ghcr.io/nepsdigitalsystem/neps-ml-ai:latest}
+    image: ghcr.io/nepsdigitalsystem/neps-ml-ai:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
+    command: !reset null
 
   neps-data-platform:
-    image: ${STABLE_DATA_IMAGE:-ghcr.io/nepsdigitalsystem/neps-data-platform:latest}
+    image: ghcr.io/nepsdigitalsystem/neps-data-platform:${IMAGE_TAG:?IMAGE_TAG must be set (target image tag, e.g. a git SHA)}
+    command: !reset null
