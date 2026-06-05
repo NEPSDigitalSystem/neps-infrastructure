@@ -1,0 +1,34 @@
+name: NEPS Infrastructure CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create CI secret stubs
+        run: |
+          mkdir -p secrets
+          printf '%s\n' 'neps' > secrets/postgres_user.txt
+          printf '%s\n' 'ci_password' > secrets/postgres_password.txt
+          printf '%s\n' 'ci_secret_key_32chars_minimum____' > secrets/app_secret_key.txt
+          printf '%s\n' 'ci_redcap_token' > secrets/redcap_api_token.txt
+          printf '%s\n' 'https://discord.com/api/webhooks/0/placeholder' > secrets/discord_webhook_url.txt
+
+      - name: Validate Docker Compose configs
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+          IMAGE_TAG=ci-test docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.rollback.yml config --quiet
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.discord-alerts.yml config --quiet
