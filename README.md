@@ -80,3 +80,5 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 **Rollback** to a prior deploy: `./scripts/rollback.sh previous` — see `docs/rollback-setup.md`.
+
+**Discord alerts** (optional): see `docs/discord-alerts-setup.md` — use `docker-compose.discord-alerts.yml` overlay.

@@ -33,5 +33,12 @@ openssl ecparam -genkey -name prime256v1 -noout -out $SECRETS_DIR/jwt_private.pe
 openssl ec -in $SECRETS_DIR/jwt_private.pem -pubout -out $SECRETS_DIR/jwt_public.pem 2>/dev/null || \
     openssl rsa -in $SECRETS_DIR/jwt_private.pem -pubout -out $SECRETS_DIR/jwt_public.pem
 
+# Discord webhook (optional — paste URL after running, or use discord-alerts overlay)
+if [ ! -f "$SECRETS_DIR/discord_webhook_url.txt" ]; then
+    cp "$SECRETS_DIR/discord_webhook_url.example" "$SECRETS_DIR/discord_webhook_url.txt" 2>/dev/null || \
+        echo "https://discord.com/api/webhooks/REPLACE_ME/REPLACE_ME" > "$SECRETS_DIR/discord_webhook_url.txt"
+    echo "⚠ Edit secrets/discord_webhook_url.txt before enabling docker-compose.discord-alerts.yml"
+fi
+
 chmod 600 $SECRETS_DIR/*
 echo "✓ Secrets generated in $SECRETS_DIR/"

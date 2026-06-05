@@ -1,0 +1,38 @@
+global:
+  resolve_timeout: 5m
+
+# Production — native Alertmanager → Discord (v0.25+).
+# Requires secrets/discord_webhook_url.txt (see docs/discord-alerts-setup.md).
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'discord-alerts'
+
+  routes:
+    - matchers:
+        - severity="critical"
+        - team="safeguarding"
+      group_wait: 0s
+      receiver: 'discord-alerts'
+
+    - matchers:
+        - severity="critical"
+      receiver: 'discord-alerts'
+
+    - matchers:
+        - severity="warning"
+      receiver: 'discord-alerts'
+
+receivers:
+  - name: 'discord-alerts'
+    discord_configs:
+      - webhook_url_file: /run/secrets/discord_webhook_url
+        send_resolved: true
+        username: 'NEPS Alerts'
+
+inhibit_rules:
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: ['alertname', 'job']

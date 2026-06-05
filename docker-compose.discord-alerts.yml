@@ -1,0 +1,26 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEPS Digital — Discord alerts overlay  (docker-compose.discord-alerts.yml)
+#
+# Switches Alertmanager from the local webhook-logger sink to Discord.
+# Requires secrets/discord_webhook_url.txt (gitignored).
+#
+# Usage:
+#   # 1. Copy and fill in your Discord webhook URL:
+#   cp secrets/discord_webhook_url.example secrets/discord_webhook_url.txt
+#
+#   # 2. Start stack with Discord routing:
+#   docker compose -f docker-compose.yml -f docker-compose.discord-alerts.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  alertmanager:
+    volumes: !override
+      - ./monitoring/alertmanager.discord.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager-data:/alertmanager
+    secrets:
+      - discord_webhook_url
+    depends_on: !override []
+
+secrets:
+  discord_webhook_url:
+    file: ./secrets/discord_webhook_url.txt
