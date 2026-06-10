@@ -28,12 +28,20 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://neps:neps_password@postgres:5432/neps_db
-      - REDIS_URL=redis://redis:6379/0
-      - REDCAP_API_URL=${REDCAP_API_URL}
+      - APP_NAME=${APP_NAME:-NEPS Digital Backend}
+      - APP_ENV=${APP_ENV:-development}
+      - DEBUG=${DEBUG:-true}
+      - DATABASE_USER=${POSTGRES_USER:-neps}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-neps_password}
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=${POSTGRES_DB:-neps_db}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDCAP_API_URL=${REDCAP_API_URL:-http://neps-backend:8000/api/redcap}
       - REDCAP_API_TOKEN=${REDCAP_API_TOKEN}
+      - REDCAP_MOCK_ENABLED=${REDCAP_MOCK_ENABLED:-true}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,6 +133,22 @@ services:
       timeout: 3s
       retries: 3
 
+  # ─── pgAdmin (Database Management UI) ────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@neps.org
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - neps-network
+    restart: unless-stopped
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+
   # ─── Monitoring ─────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
@@ -178,4 +202,6 @@ volumes:
   prometheus-data:
     driver: local
   grafana-data:
+    driver: local
+  pgadmin-data:
     driver: local
