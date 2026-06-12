@@ -239,8 +239,8 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ./monitoring/alertmanager.discord.yml:/etc/alertmanager/alertmanager.discord.yml:ro
+      - ./monitoring/alertmanager.discord.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ../secrets/discord_webhook_url.txt:/run/secrets/discord_webhook_url:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
