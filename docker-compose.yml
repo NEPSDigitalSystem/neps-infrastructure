@@ -51,6 +51,7 @@ services:
     networks:
       - neps-internal
       - neps-database
+      - neps-public
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000')"]
       interval: 10s
@@ -101,6 +102,7 @@ services:
     networks:
       - neps-internal
       - neps-database
+      - neps-public
     security_opt:
       - no-new-privileges:true
     restart: "no"
