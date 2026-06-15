@@ -41,9 +41,10 @@ The `neps-infrastructure` repository serves as the unified orchestration layer.
 
 ## 📈 Monitoring & Observability
 
-- **Prometheus**: Scrapes metrics from `/metrics` endpoints.
+- **Prometheus**: Scrapes metrics from internal `/metrics` endpoints.
+- **Blackbox Exporter**: Actively probes external HTTP/TCP endpoints to monitor service uptime from the user's perspective.
 - **Loki & Promtail**: Centralized log aggregation for all containers.
-- **Alertmanager**: Handles critical alerts (defined in `monitoring/rules/`).
+- **Alertmanager**: Handles critical infrastructure and clinical alerts (defined in `monitoring/rules/`), including high-distress safeguarding crisis detection, database/disk thresholds, and data pipeline failures.
 - **Grafana**: Automatically provisioned with datasources and the "NEPS Overview" dashboard.
 
 ---
@@ -51,6 +52,7 @@ The `neps-infrastructure` repository serves as the unified orchestration layer.
 ## 🔄 Disaster Recovery (PITR & Rollbacks)
 
 - **Point-In-Time Recovery (PITR)**: Scripts (`pitr-setup.sh`, `backup-pitr.sh`, `pitr-restore.sh`) automatically perform daily base backups and continuous WAL (Write-Ahead Log) archiving, allowing the PostgreSQL database to be restored to *any specific second* in the past 30 days.
+- **PITR Drills**: The `pitr-drill.sh` script allows administrators to perform safe, end-to-end disaster recovery testing. It spins up an isolated temporary PostgreSQL instance on a separate port to verify data restoration without touching the live database.
 - **Rollbacks**: The `rollback.sh` script supports instant Blue-Green deployment switching via Nginx, and specific git SHA-based container pullbacks if a bad image enters production.
 
 ---
