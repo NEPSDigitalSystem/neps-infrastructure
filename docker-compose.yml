@@ -81,22 +81,28 @@ services:
 
   # ─── Data Platform ───
   neps-data-platform:
-    image: python:3.11-slim
-    command: python -m http.server 8000
-    # build:
-    #   context: ../neps-data-platform
-    #   dockerfile: Dockerfile
+    build:
+      context: ../neps-data-platform
+      dockerfile: Dockerfile
+    image: ghcr.io/nepsdigitalsystem/neps-data-platform:${IMAGE_TAG:-local}
+    # Run migrations then sync on every startup (idempotent)
+    command: >
+      sh -c "python -m etl.main migrate && python -m etl.main sync --full"
     environment:
-      - DATABASE_URL_FILE=/run/secrets/postgres_password
-    secrets:
-      - postgres_password
+      - DATABASE_URL=postgresql://neps:neps_password@postgres:5432/neps_db
+      - REDCAP_API_URL=http://neps-backend:8000/api/redcap
+      - REDCAP_MOCK_ENABLED=true
+      - REDCAP_PROJECT_ID=NEPS-2025
+      - APP_ENV=development
     depends_on:
       - postgres
+      - neps-backend
     networks:
       - neps-internal
       - neps-database
     security_opt:
       - no-new-privileges:true
+    restart: "no"
 
   # ─── Shared Services ───
   # One-shot: fix ownership of WAL archive volumes so postgres (uid 70) can write.
