@@ -156,6 +156,7 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -163,6 +164,52 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
+    depends_on:
+      - alertmanager
+      - postgres-exporter
+      - redis-exporter
+      - node-exporter
+    networks:
+      - neps-network
+    restart: unless-stopped
+
+  # ─── Prometheus Exporters ────────────────────────────────────────────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://neps:neps_password@postgres:5432/neps_db?sslmode=disable
+    depends_on:
+      - postgres
+    networks:
+      - neps-network
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+    networks:
+      - neps-network
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     networks:
       - neps-network
     restart: unless-stopped
@@ -181,6 +228,61 @@ services:
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     depends_on:
       - prometheus
+      - loki
+    networks:
+      - neps-network
+    restart: unless-stopped
+
+  # ─── Alertmanager (Alert Routing & Notifications) ────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.discord.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ../secrets/discord_webhook_url.txt:/run/secrets/discord_webhook_url:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - neps-network
+    restart: unless-stopped
+
+  # ─── Loki (Log Aggregation) ──────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - neps-network
+    restart: unless-stopped
+
+  # ─── Promtail (Log Collector) ────────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - neps-network
+    restart: unless-stopped
+
+  # ─── Ofelia (Job Scheduler) ──────────────────────────────────────────────────
+  ofelia:
+    image: mcuadros/ofelia:latest
+    ports:
+      - "7070:7070"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/ofelia/config.ini:/etc/ofelia/config.ini:ro
+    command: daemon --docker --config /etc/ofelia/config.ini
     networks:
       - neps-network
     restart: unless-stopped
@@ -204,4 +306,6 @@ volumes:
   grafana-data:
     driver: local
   pgadmin-data:
+    driver: local
+  loki-data:
     driver: local

@@ -193,6 +193,7 @@ services:
       - neps-backend
       - postgres-exporter
       - node-exporter
+      - blackbox-exporter
       - alertmanager
     security_opt:
       - no-new-privileges:true
@@ -301,7 +302,21 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # ─── Reverse Proxy ───
+  # Blackbox exporter — active HTTP/TCP probes (external service health from user perspective)
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    networks:
+      - neps-internal
+      - neps-monitoring
+    security_opt:
+      - no-new-privileges:true
+
   nginx:
     image: nginx:alpine
     ports:
