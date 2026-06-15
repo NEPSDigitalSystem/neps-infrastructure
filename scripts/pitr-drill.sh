@@ -91,7 +91,6 @@ docker run --rm \
     -v "$(realpath "$BACKUP_DIR/base"):/backup/base:ro" \
     postgres:15-alpine \
     sh -c "
-        tar -xzf /backup/base/$LATEST_BASE -C /var/lib/postgresql/data --strip-components=1 2>&1 || \
         tar -xzf /backup/base/$LATEST_BASE -C /var/lib/postgresql/data 2>&1
         chown -R postgres:postgres /var/lib/postgresql/data
     " | tee -a "$LOG_FILE"
