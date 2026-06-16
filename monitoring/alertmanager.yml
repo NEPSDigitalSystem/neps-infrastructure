@@ -1,14 +1,12 @@
 global:
   resolve_timeout: 5m
 
-# Default: webhook-logger sink (visible via `docker compose logs webhook-logger`).
-# Replace webhook_configs with Slack/email when credentials are available.
 route:
   group_by: ['alertname', 'cluster', 'service']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
-  receiver: 'webhook-logger'
+  receiver: 'primary-alerts'
 
   routes:
     # Safeguarding alerts — notify immediately
@@ -16,28 +14,24 @@ route:
         - severity="critical"
         - team="safeguarding"
       group_wait: 0s
-      receiver: 'webhook-logger'
+      receiver: 'primary-alerts'
 
     - matchers:
         - severity="critical"
-      receiver: 'webhook-logger'
+      receiver: 'primary-alerts'
 
     - matchers:
         - severity="warning"
-      receiver: 'webhook-logger'
+      receiver: 'primary-alerts'
 
 receivers:
-  - name: 'webhook-logger'
+  - name: 'primary-alerts'
     webhook_configs:
       - url: 'http://webhook-logger:8080/'
         send_resolved: true
-
-  # Uncomment when Slack webhook is provisioned:
-  # - name: 'slack-alerts'
-  #   slack_configs:
-  #     - api_url: 'https://hooks.slack.com/services/T.../B.../xxx'
-  #       channel: '#neps-alerts'
-  #       send_resolved: true
+    discord_configs:
+      - webhook_url: 'https://discord.com/api/webhooks/1512576953113378828/R05PLkf5mNO6tjx2VqY3L_tUVNGkghCXKxAQgVDSGyjgpyfVV3-GnVnEWLSVHXsioSM4'
+        send_resolved: true
 
 inhibit_rules:
   - source_matchers: ['severity="critical"']

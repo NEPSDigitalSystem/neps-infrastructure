@@ -37,8 +37,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL_FILE=/run/secrets/postgres_password # Assuming app has logic to read from file
-      - REDCAP_API_URL=${REDCAP_API_URL:-http://localhost:8001}
+      - DATABASE_URL_FILE=/run/secrets/postgres_password
+      - REDCAP_MOCK_ENABLED=false
+      - REDCAP_API_URL=https://mock-redcap-service.onrender.com/api
       - REDCAP_API_TOKEN_FILE=/run/secrets/redcap_api_token
     secrets:
       - redcap_api_token
@@ -50,6 +51,7 @@ services:
     networks:
       - neps-internal
       - neps-database
+      - neps-public
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000')"]
       interval: 10s
@@ -81,22 +83,29 @@ services:
 
   # ─── Data Platform ───
   neps-data-platform:
-    image: python:3.11-slim
-    command: python -m http.server 8000
-    # build:
-    #   context: ../neps-data-platform
-    #   dockerfile: Dockerfile
+    build:
+      context: ../neps-data-platform
+      dockerfile: Dockerfile
+    image: ghcr.io/nepsdigitalsystem/neps-data-platform:${IMAGE_TAG:-local}
+    # Run migrations then full sync on each startup (idempotent)
+    # Points directly at the hosted mock REDCap on Render — no backend proxy needed.
+    command: >
+      sh -c "python -m etl.main migrate && python -m etl.main sync --full"
     environment:
-      - DATABASE_URL_FILE=/run/secrets/postgres_password
-    secrets:
-      - postgres_password
+      - DATABASE_URL=postgresql://neps:neps_password@postgres:5432/neps_db
+      - REDCAP_API_URL=https://mock-redcap-service.onrender.com
+      - REDCAP_MOCK_ENABLED=true
+      - REDCAP_PROJECT_ID=NEPS-2025
+      - APP_ENV=development
     depends_on:
       - postgres
     networks:
       - neps-internal
       - neps-database
+      - neps-public
     security_opt:
       - no-new-privileges:true
+    restart: "no"
 
   # ─── Shared Services ───
   # One-shot: fix ownership of WAL archive volumes so postgres (uid 70) can write.
