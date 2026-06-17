@@ -2,11 +2,12 @@ name: NEPS Infrastructure CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/infra-pipeline-v2]
   pull_request:
     branches: [main]
 
 jobs:
+  # ─── VALIDATE STAGE ───
   validate-compose:
     runs-on: ubuntu-latest
     steps:
@@ -32,3 +33,91 @@ jobs:
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.discord-alerts.yml config --quiet
+
+  validate-nginx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Nginx configuration
+        run: |
+          mkdir -p nginx/ssl
+          touch nginx/ssl/neps.crt nginx/ssl/neps.key
+          # Fix: Use explicit config file path and avoid overwriting default mime.types
+          # The -t -c /etc/nginx/nginx.conf ensures it reads our mounted file
+          docker run --rm \
+            -v $PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
+            -v $PWD/nginx/ssl:/etc/nginx/ssl:ro \
+            nginx:alpine nginx -t -c /etc/nginx/nginx.conf
+
+  test-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check script syntax
+        run: |
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
+
+      - name: Test script execution bits
+        run: |
+          chmod +x scripts/*.sh
+          for script in scripts/*.sh; do
+            head -n1 "$script" | grep -qE '#!/bin/(bash|sh)' || (echo "Missing shebang in $script" && exit 1)
+          done
+
+  # ─── SECURITY STAGE ───
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret Scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy on Docker Compose file
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: 'config'
+          scan-ref: 'docker-compose.yml'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ─── LINT STAGE ───
+  lint-configs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint YAML files
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .
+          config_data: |
+            extends: default
+            rules:
+              line-length: disable
+              document-start: disable
