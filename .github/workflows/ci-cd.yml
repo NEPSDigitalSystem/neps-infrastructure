@@ -13,7 +13,6 @@ concurrency:
 
 jobs:
   # ─── CORE VALIDATION ───
-  # We combine essential checks to reduce job count and overhead
   validate:
     runs-on: ubuntu-latest
     steps:
@@ -22,11 +21,11 @@ jobs:
       - name: Create CI secret stubs
         run: |
           mkdir -p secrets
-          printf 'neps' > secrets/postgres_user.txt
-          printf 'ci_password' > secrets/postgres_password.txt
-          printf 'ci_secret_key_32chars_minimum____' > secrets/app_secret_key.txt
-          printf 'ci_redcap_token' > secrets/redcap_api_token.txt
-          printf 'https://discord.com/api/webhooks/0/placeholder' > secrets/discord_webhook_url.txt
+          echo "neps" > secrets/postgres_user.txt
+          echo "ci_password" > secrets/postgres_password.txt
+          echo "ci_secret_key_32chars_minimum____" > secrets/app_secret_key.txt
+          echo "ci_redcap_token" > secrets/redcap_api_token.txt
+          echo "https://discord.com/api/webhooks/0/placeholder" > secrets/discord_webhook_url.txt
 
       - name: Validate Docker Compose
         run: |
@@ -37,9 +36,6 @@ jobs:
         run: |
           mkdir -p nginx/ssl
           touch nginx/ssl/neps.crt nginx/ssl/neps.key
-          # Pull image once to speed up
-          docker pull nginx:alpine --quiet
-          # Use default config structure but point to our file
           docker run --rm \
             -v $PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
             -v $PWD/nginx/ssl:/etc/nginx/ssl:ro \
@@ -47,10 +43,15 @@ jobs:
 
       - name: Check Scripts
         run: |
-          for script in scripts/*.sh; do
-            bash -n "$script"
-            head -n1 "$script" | grep -qE '#!/bin/(bash|sh)' || (echo "Missing shebang in $script" && exit 1)
-          done
+          # Use find to avoid issues if scripts directory is empty or missing
+          if [ -d "scripts" ]; then
+            for script in scripts/*.sh; do
+              if [ -f "$script" ]; then
+                bash -n "$script"
+                head -n1 "$script" | grep -qE '#!/bin/(bash|sh)' || (echo "Missing shebang in $script" && exit 1)
+              fi
+            done
+          fi
 
   # ─── SECURITY ───
   security:
@@ -65,7 +66,7 @@ jobs:
 
       - name: Secret Scan
         uses: trufflesecurity/trufflehog@main
-        continue-on-error: true # Don't block dev if historical secrets exist
+        continue-on-error: true
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
