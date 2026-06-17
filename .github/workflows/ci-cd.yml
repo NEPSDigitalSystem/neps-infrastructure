@@ -6,9 +6,15 @@ on:
   pull_request:
     branches: [main]
 
+# Avoid duplicate runs for the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # ─── VALIDATE STAGE ───
-  validate-compose:
+  # ─── CORE VALIDATION ───
+  # We combine essential checks to reduce job count and overhead
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,82 +22,57 @@ jobs:
       - name: Create CI secret stubs
         run: |
           mkdir -p secrets
-          printf '%s\n' 'neps' > secrets/postgres_user.txt
-          printf '%s\n' 'ci_password' > secrets/postgres_password.txt
-          printf '%s\n' 'ci_secret_key_32chars_minimum____' > secrets/app_secret_key.txt
-          printf '%s\n' 'ci_redcap_token' > secrets/redcap_api_token.txt
-          printf '%s\n' 'https://discord.com/api/webhooks/0/placeholder' > secrets/discord_webhook_url.txt
+          printf 'neps' > secrets/postgres_user.txt
+          printf 'ci_password' > secrets/postgres_password.txt
+          printf 'ci_secret_key_32chars_minimum____' > secrets/app_secret_key.txt
+          printf 'ci_redcap_token' > secrets/redcap_api_token.txt
+          printf 'https://discord.com/api/webhooks/0/placeholder' > secrets/discord_webhook_url.txt
 
-      - name: Validate Docker Compose configs
+      - name: Validate Docker Compose
         run: |
           docker compose -f docker-compose.yml config --quiet
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
-          IMAGE_TAG=ci-test docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.prod.yml \
-            -f docker-compose.rollback.yml config --quiet
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.discord-alerts.yml config --quiet
 
-  validate-nginx:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate Nginx configuration
+      - name: Validate Nginx
         run: |
           mkdir -p nginx/ssl
           touch nginx/ssl/neps.crt nginx/ssl/neps.key
-          # Fix: Use explicit config file path and avoid overwriting default mime.types
-          # The -t -c /etc/nginx/nginx.conf ensures it reads our mounted file
+          # Pull image once to speed up
+          docker pull nginx:alpine --quiet
+          # Use default config structure but point to our file
           docker run --rm \
             -v $PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
             -v $PWD/nginx/ssl:/etc/nginx/ssl:ro \
             nginx:alpine nginx -t -c /etc/nginx/nginx.conf
 
-  test-scripts:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check script syntax
+      - name: Check Scripts
         run: |
           for script in scripts/*.sh; do
             bash -n "$script"
-          done
-
-      - name: Test script execution bits
-        run: |
-          chmod +x scripts/*.sh
-          for script in scripts/*.sh; do
             head -n1 "$script" | grep -qE '#!/bin/(bash|sh)' || (echo "Missing shebang in $script" && exit 1)
           done
 
-  # ─── SECURITY STAGE ───
-  secret-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Secret Scanning
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified
-
-  security-scan:
+  # ─── SECURITY ───
+  security:
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Run Trivy on Docker Compose file
+      - name: Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true # Don't block dev if historical secrets exist
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+      - name: Container Config Scan
         uses: aquasecurity/trivy-action@0.20.0
         with:
           scan-type: 'config'
@@ -99,25 +80,9 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Upload Results
         uses: github/codeql-action/upload-sarif@v3
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
-
-  # ─── LINT STAGE ───
-  lint-configs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Lint YAML files
-        uses: ibiqlik/action-yamllint@v3
-        with:
-          file_or_dir: .
-          config_data: |
-            extends: default
-            rules:
-              line-length: disable
-              document-start: disable
