@@ -15,6 +15,9 @@ jobs:
   # ─── CORE VALIDATION ───
   validate:
     runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ci-test  # For compose interpolation
+     
     steps:
       - uses: actions/checkout@v4
 
@@ -93,7 +96,7 @@ jobs:
           extra_args: --only-verified
 
       - name: Container Config Scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.29.0  # Fixed: added 'v' prefix!
         with:
           scan-type: 'config'
           scan-ref: '.'
