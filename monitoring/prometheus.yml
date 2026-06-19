@@ -34,10 +34,10 @@ scrape_configs:
       - targets: ['neps-ml-ai:8000']
     metrics_path: /metrics
 
-  - job_name: 'neps-data-platform'
-    static_configs:
-      - targets: ['neps-data-platform:8000']
-    metrics_path: /metrics
+  # - job_name: 'neps-data-platform'
+  #   static_configs:
+  #     - targets: ['neps-data-platform:8000']
+  #   metrics_path: /metrics
 
   - job_name: 'postgres-exporter'
     static_configs:
@@ -62,7 +62,7 @@ scrape_configs:
           - http://neps-backend:8000       # Backend root
           - http://neps-backend:8000/health
           - http://neps-ml-ai:8000         # ML/AI placeholder
-          - http://neps-data-platform:8000 # Data Platform placeholder
+          # - http://neps-data-platform:8000 # Data Platform placeholder (one-shot)
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

@@ -12,17 +12,13 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NODE_ENV=development
-      - WATCHPACK_POLLING=true
       - AUTH_SECRET_FILE=/run/secrets/app_secret_key
       - NEXTAUTH_URL=http://localhost:3000
-    volumes:
-      - ../neps-portal:/app
-      - /app/node_modules
-      - /app/.next
     secrets:
       - app_secret_key
     networks:
       - neps-internal
+      - neps-monitoring
     depends_on:
       - neps-backend
     security_opt:
@@ -52,6 +48,7 @@ services:
       - neps-internal
       - neps-database
       - neps-public
+      - neps-monitoring
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000')"]
       interval: 10s
@@ -62,11 +59,10 @@ services:
 
   # ─── ML/AI ───
   neps-ml-ai:
-    image: python:3.11-slim
-    command: python -m http.server 8000
-    # build:
-    #   context: ../neps-ml-ai
-    #   dockerfile: Dockerfile
+    build:
+      context: ../neps-ml-ai
+      dockerfile: Dockerfile
+    image: ghcr.io/nepsdigitalsystem/neps-ml-ai:${IMAGE_TAG:-local}
     ports:
       - "8001:8000"
     environment:
@@ -78,6 +74,12 @@ services:
     networks:
       - neps-internal
       - neps-database
+      - neps-monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     security_opt:
       - no-new-privileges:true
 
