@@ -17,7 +17,7 @@ jobs:
       IMAGE_TAG: ci-test
      
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Create CI stubs (secrets, configs, dirs)
         run: |
@@ -93,12 +93,12 @@ jobs:
       actions: read
      
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Secret Scan
-        uses: trufflesecurity/trufflehog@v3.82.0
+        uses: trufflesecurity/trufflehog@v3.95.6
         continue-on-error: true
         with:
           path: ./
@@ -117,7 +117,7 @@ jobs:
           exit-code: '1'
 
       - name: Upload Results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
