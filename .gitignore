@@ -230,4 +230,6 @@ backups/
 
 # Local secret files - Docker mounts these at runtime
 secrets/*.txt
+secrets/*.pem
+secrets/*.example
 !secrets/.gitkeep

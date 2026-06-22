@@ -92,9 +92,8 @@ services:
     # Run migrations then full sync on each startup (idempotent)
     # Points directly at the hosted mock REDCap on Render — no backend proxy needed.
     command: >
-      sh -c "python -m etl.main migrate && python -m etl.main sync --full"
+      sh -c "export DATABASE_URL=postgresql://neps:$$(cat /run/secrets/postgres_password)@postgres:5432/neps_db && python -m etl.main migrate && python -m etl.main sync --full"
     environment:
-      - DATABASE_URL=postgresql://neps:neps_password@postgres:5432/neps_db
       - REDCAP_API_URL=https://mock-redcap-service.onrender.com
       - REDCAP_MOCK_ENABLED=true
       - REDCAP_PROJECT_ID=NEPS-2025
@@ -242,9 +241,11 @@ services:
     ports:
       - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/app_secret_key
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3001
+    secrets:
+      - app_secret_key
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
@@ -288,8 +289,11 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     environment:
-      # Builds DATA_SOURCE_NAME from the secret files at startup via entrypoint
-      DATA_SOURCE_NAME: "postgresql://neps:neps_password@postgres:5432/neps_db?sslmode=disable"
+      DATA_SOURCE_URI: "postgres:5432/neps_db?sslmode=disable"
+      DATA_SOURCE_USER: "neps"
+      DATA_SOURCE_PASS_FILE: "/run/secrets/postgres_password"
+    secrets:
+      - postgres_password
     networks:
       - neps-database
       - neps-internal

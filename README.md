@@ -62,7 +62,7 @@ The `neps-infrastructure` repository serves as the unified orchestration layer.
 The NEPS pipeline emphasizes automation from code push to deployment:
 1. **GitHub Actions**: Workflows (`ci-cd.yml`) exist in every repository to validate code, run tests, and build Docker containers upon push.
 2. **GHCR Container Registry**: We use `ghcr.io/nepsdigitalsystem/` as our private image registry. The pipelines authenticate using an organization-wide `GHCR_PAT` secret, ensuring secure, token-based programmatic pushes.
-3. Once containers are pushed to GHCR, `neps-infrastructure` pulls those updated images down using our `push-all-repos.ps1` synchronization script.
+3. Once containers are pushed to GHCR, `neps-infrastructure` pulls those updated images down using our `push-all-repos.ps1` synchronization script (located at the workspace root).
 
 ---
 
@@ -78,7 +78,7 @@ docker compose up -d
 ```bash
 ./scripts/setup-secrets.sh
 export IMAGE_TAG=latest   # or a specific git SHA
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.discord-alerts.yml up -d
 ```
 
 **Rollback** to a prior deploy: `./scripts/rollback.sh previous` — see `docs/rollback-setup.md`.
