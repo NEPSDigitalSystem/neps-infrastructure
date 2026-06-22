@@ -92,7 +92,7 @@ services:
     # Run migrations then full sync on each startup (idempotent)
     # Points directly at the hosted mock REDCap on Render — no backend proxy needed.
     command: >
-      sh -c "export DATABASE_URL=postgresql://neps:$$(cat /run/secrets/postgres_password)@postgres:5432/neps_db && python -m etl.main migrate && python -m etl.main sync --full"
+      sh -c "export DATABASE_URL=postgresql://neps:$$(cat /run/secrets/postgres_password)@postgres:5432/neps_db && python -m etl.main migrate && sleep infinity"
     environment:
       - REDCAP_API_URL=https://mock-redcap-service.onrender.com
       - REDCAP_MOCK_ENABLED=true
@@ -106,7 +106,7 @@ services:
       - neps-public
     security_opt:
       - no-new-privileges:true
-    restart: "no"
+    restart: always
 
   # ─── Shared Services ───
   # One-shot: fix ownership of WAL archive volumes so postgres (uid 70) can write.
