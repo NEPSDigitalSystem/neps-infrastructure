@@ -25,6 +25,7 @@ The `neps-infrastructure` repository serves as the unified orchestration layer.
   2. `neps-internal`: Backend, ML, and Data services.
   3. `neps-database`: Fully isolated for PostgreSQL.
 - **`nginx/`**: Handles TLS termination and routing.
+- **Mock REDCap API Integration**: Underpins development of the data ingestion pipelines. It exposes realistic clinical and qualitative longitudinal data, including the newly integrated **2000-row semantically correlated NLP dataset** (with text-derived sentiment, emotions, themes, and clinical statuses) which allows the `neps-ml-ai` models and `neps-data-platform` pipelines to train and run tests on clean, non-random correlation patterns before swapping to the live REDCap server.
 
 ---
 
