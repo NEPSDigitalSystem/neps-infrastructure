@@ -15,19 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_TAG: ci-test
-     
+
     steps:
-      - uses: actions/checkout@v4  # FIXED: v7 doesn't exist
+      - uses: actions/checkout@v4
 
       - name: Create CI stubs (secrets, configs, dirs)
         run: |
+          # Secrets
           mkdir -p secrets
           echo "neps" > secrets/postgres_user.txt
           echo "ci_password" > secrets/postgres_password.txt
           echo "ci_secret_key_32chars_minimum___" > secrets/app_secret_key.txt
           echo "ci_redcap_token" > secrets/redcap_api_token.txt
           echo "https://discord.com/api/webhooks/0/placeholder" > secrets/discord_webhook_url.txt
-           
+
+          # Monitoring configs (all referenced by docker-compose.yml)
           mkdir -p monitoring/rules
           mkdir -p monitoring/grafana/provisioning/dashboards
           mkdir -p monitoring/grafana/provisioning/datasources
@@ -38,12 +40,13 @@ jobs:
           touch monitoring/promtail-config.yml
           touch monitoring/blackbox.yml
           touch monitoring/ofelia/config.ini
-           
+
+          # Other referenced dirs/files
           mkdir -p scripts
           touch scripts/backup.sh
           echo '#!/bin/bash' > scripts/backup.sh
           chmod +x scripts/backup.sh
-           
+
           mkdir -p backups/minio
           mkdir -p nginx/ssl
           touch nginx/ssl/neps.crt
@@ -52,17 +55,19 @@ jobs:
       - name: Validate Docker Compose
         run: |
           docker compose -f docker-compose.yml config --quiet
+
           if [ -f docker-compose.prod.yml ]; then
             docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
           fi
 
-      - name: Validate Nginx Syntax
+      - name: Validate Nginx Syntax (basic check)
         run: |
           if [ -f nginx/nginx.conf ]; then
+            echo "Checking nginx.conf exists and has required sections..."
             grep -q "upstream" nginx/nginx.conf || (echo "Missing upstream blocks" && exit 1)
             grep -q "server {" nginx/nginx.conf || (echo "Missing server blocks" && exit 1)
             grep -q "location /" nginx/nginx.conf || (echo "Missing location blocks" && exit 1)
-            echo "nginx.conf structure looks valid"
+            echo "nginx.conf structure looks valid (upstream resolution tested at deploy)"
           else
             echo "nginx.conf not found, skipping"
           fi
@@ -84,13 +89,13 @@ jobs:
       security-events: write
       contents: read
       actions: read
-     
+
     steps:
-      - uses: actions/checkout@v4  # FIXED: v7 -> v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # FIXED: Skip secret scan on Dependabot PRs (permission issues)
+      # Skip secret scan on Dependabot PRs (permission issues with diff scanning)
       - name: Secret Scan (PR — diff only)
         if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
         uses: trufflesecurity/trufflehog@v3.95.6
@@ -109,7 +114,7 @@ jobs:
           path: ./
           extra_args: --only-verified
 
-      # FIXED: Pin trivy-action to a stable version, not master
+      # FIXED: Pinned trivy-action to v0.36.0 (was @master, which was compromised)
       - name: Container Config Scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
