@@ -111,7 +111,7 @@ jobs:
 
       # FIXED: Pin trivy-action to a stable version, not master
       - name: Container Config Scan
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'config'
           scan-ref: '.'
