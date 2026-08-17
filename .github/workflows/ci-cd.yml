@@ -98,7 +98,7 @@ jobs:
       # Skip secret scan on Dependabot PRs (permission issues with diff scanning)
       - name: Secret Scan (PR — diff only)
         if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-        uses: trufflesecurity/trufflehog@v3.96.0
+        uses: trufflesecurity/trufflehog@v3.97.0
         continue-on-error: true
         with:
           path: ./
@@ -108,7 +108,7 @@ jobs:
 
       - name: Secret Scan (Push — full repo)
         if: github.event_name == 'push'
-        uses: trufflesecurity/trufflehog@v3.96.0
+        uses: trufflesecurity/trufflehog@v3.97.0
         continue-on-error: true
         with:
           path: ./
@@ -126,7 +126,7 @@ jobs:
           exit-code: '1'
 
       - name: Upload Results
-        uses: github/codeql-action/upload-sarif@v4.37.6
+        uses: github/codeql-action/upload-sarif@v4.37.7
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
