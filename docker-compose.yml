@@ -104,6 +104,8 @@ services:
       - REDCAP_MOCK_ENABLED=true
       - REDCAP_PROJECT_ID=NEPS-2025
       - APP_ENV=development
+    secrets:
+      - postgres_password
     depends_on:
       - postgres
     networks:
