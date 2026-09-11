@@ -2,9 +2,9 @@ name: NEPS Infrastructure CI
 
 on:
   push:
-    branches: [main, feature/cicd-full-fix]
+    branches: [main, staging, feature/cicd-full-fix]
   pull_request:
-    branches: [main]
+    branches: [main, staging]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -58,6 +58,20 @@ jobs:
 
           if [ -f docker-compose.prod.yml ]; then
             docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+          fi
+
+          # Validate staging overlay (stack must compose cleanly on staging deploys)
+          if [ -f docker-compose.staging.yml ]; then
+            echo "ci_redcap_token_staging" > secrets/redcap_api_token_staging.txt 2>/dev/null || true
+            echo "https://discord.com/api/webhooks/0/staging" > secrets/discord_webhook_url_staging.txt 2>/dev/null || true
+            touch monitoring/alertmanager.staging.yml 2>/dev/null || true
+            touch monitoring/ofelia/config.staging.ini 2>/dev/null || true
+            touch nginx/staging-nginx.conf 2>/dev/null || true
+            COMPOSE_PROJECT_NAME=neps-staging \
+            docker compose -f docker-compose.yml \
+                          -f docker-compose.prod.yml \
+                          -f docker-compose.staging.yml \
+                          config --quiet
           fi
 
       - name: Validate Nginx Syntax (basic check)
@@ -130,3 +144,72 @@ jobs:
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
+
+  deploy-staging:
+    needs: [validate, security]
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy full stack to STAGING server
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.STAGING_DEPLOY_HOST }}
+          username: ${{ secrets.STAGING_DEPLOY_USER }}
+          key: ${{ secrets.STAGING_DEPLOY_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/neps-infrastructure
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Ensure staging-specific secret stubs exist the first time this runs.
+            # Replace placeholder values with real staging secrets via `docker compose config` after.
+            mkdir -p secrets backups/staging-minio
+            [ -f secrets/discord_webhook_url_staging.txt ] || \
+              echo "https://discord.com/api/webhooks/REPLACE_ME_STAGING" > secrets/discord_webhook_url_staging.txt
+
+            export COMPOSE_PROJECT_NAME=neps-staging
+            export IMAGE_TAG=staging
+            docker compose -f docker-compose.yml \
+                          -f docker-compose.prod.yml \
+                          -f docker-compose.staging.yml \
+                          pull
+            docker compose -f docker-compose.yml \
+                          -f docker-compose.prod.yml \
+                          -f docker-compose.staging.yml \
+                          up -d
+            docker image prune -f
+            echo "Staging full-stack deployed at $(date) — ${IMAGE_TAG}"
+            echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ"),neps-infrastructure,staging,${IMAGE_TAG}" >> .deployment-history
+
+  deploy:
+    needs: [validate, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy full stack to PRODUCTION server
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/neps-infrastructure
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            export COMPOSE_PROJECT_NAME=neps-infrastructure
+            export IMAGE_TAG=latest
+            docker compose -f docker-compose.yml \
+                          -f docker-compose.prod.yml \
+                          pull
+            docker compose -f docker-compose.yml \
+                          -f docker-compose.prod.yml \
+                          up -d
+            docker image prune -f
+            echo "Production full-stack deployed at $(date) — ${IMAGE_TAG}"
+            echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ"),neps-infrastructure,production,${IMAGE_TAG}" >> .deployment-history

@@ -75,13 +75,86 @@ The NEPS pipeline emphasizes automation from code push to deployment:
 docker compose up -d
 ```
 
-**Production / staging** (pulls versioned images from GHCR):
+**Production** (pulls versioned images from GHCR):
 ```bash
 ./scripts/setup-secrets.sh
 export IMAGE_TAG=latest   # or a specific git SHA
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.discord-alerts.yml up -d
 ```
 
+---
+
+## 🧪 Staging Environment
+
+Staging runs the **identical stack** as production using the same Dockerfiles and base compose service definitions. Isolation is provided by:
+
+1. **Namespaced project name** — `COMPOSE_PROJECT_NAME=neps-staging` prefixes every container, volume, and network name so staging never touches production data.
+2. **Separate host ports** — staging nginx binds `18080:80 / 18443:443` (prod: `80/443`); all other services shift by +10,000 (e.g. portal `13000`, backend `18000`, Grafana `13001`, Prometheus `19090`, Alertmanager `19093`, PgAdmin `15050`, Postgres `15432`).
+3. **Separate data volumes** — staging gets its own `postgres-data-staging`, `wal-archive-staging`, `base-archive-staging`, `grafana-data-staging`, `prometheus-data-staging`, `redis-data-staging`, `alertmanager-data-staging`, `loki-data-staging`, `pgadmin-data-staging`. PITR restore drills on staging do not touch production backups.
+4. **Separate Discord alert route** — `alertmanager.staging.yml` routes all critical/warning alerts to `#staging-alerts` test-only channel via `secrets/discord_webhook_url_staging.txt`. A synthetic alert smoke test is scheduled at 10:00 UTC every day via Ofelia to confirm the routing is live.
+5. **Separate Ofelia scheduler config** — `config.staging.ini` looks up staging-prefixed container names (`neps-staging-neps-data-platform-1` etc.), because Ofelia matches containers by resolved Docker name.
+6. **Separate Nginx config** — `staging-nginx.conf` emits the `X-NEPS-Environment: staging` response header and `X-Robots-Tag: noindex` so staging is never indexed and every response is identifiable.
+
+### Option A — Single-host staging (prod + staging side-by-side on one KNUST VM)
+
+This is the zero-hardware option — recommended before the second physical VM is provisioned:
+
+```bash
+# ── One-time secrets setup ──────────────────────────────────────────────
+./scripts/setup-secrets.sh
+# Create staging-only secret (separate Discord test webhook URL)
+mkdir -p secrets
+echo "https://discord.com/api/webhooks/YOUR_STAGING_WEBHOOK_URL" > secrets/discord_webhook_url_staging.txt
+mkdir -p backups/staging-minio backups/staging-postgres
+
+# ── Bring STAGING up ────────────────────────────────────────────────────
+export COMPOSE_PROJECT_NAME=neps-staging
+export IMAGE_TAG=staging          # or a specific git SHA for pinned deploy
+docker compose -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              -f docker-compose.staging.yml \
+              up -d
+
+# ── Verify staging is up ────────────────────────────────────────────────
+# All staging URLs use the +10000 ports:
+#   Frontend:      http://<host>:13000   (or nginx: http://<host>:18080)
+#   Backend:       http://<host>:18000/health
+#   Grafana:       http://<host>:13001
+#   Prometheus:    http://<host>:19090
+#   Alertmanager:  http://<host>:19093
+#   PgAdmin:       http://<host>:15050
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.staging.yml ps
+```
+
+Then separately (in a different shell, without `COMPOSE_PROJECT_NAME=neps-staging` exported), bring production up normally — it will own `:80 / :443 / :3000 / :8000 / :3001 / :9090`.
+
+### Option B — Dedicated staging VM (separate physical KNUST host)
+
+Same commands as Option A, but run them on the second VM with `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_KEY` GitHub vars replaced by `STAGING_DEPLOY_HOST` / `STAGING_DEPLOY_USER` / `STAGING_DEPLOY_KEY` in the CI secrets. Port overlap no longer matters (you can even edit the staging overlay ports back to 80/443 for a VM that doesn't host prod).
+
+### Git-branch flow with staging
+
+The staging tier is wired to the `staging` branch in all 5 repos:
+```
+feature-branch  →  PR to staging  →  CI runs validate/build/security
+                              ↘    (if STAGING_DEPLOY_HOST GitHub var is set)
+                               ↘   deploy-staging job deploys to staging server
+                                              ↓
+                                on-call smoke-tests on staging URLs
+                                              ↓
+                                     PR from staging → main
+                                              ↓
+                                deploy job deploys to production server
+```
+Push to `main` always triggers production only; push to `staging` always triggers staging only. The two deploy jobs never race because they're guarded by `github.ref`:
+
+| Push to branch | Validated | Built | Security-scanned | Deployed to |
+|---|---|---|---|---|
+| feature/* | ✅ | ✅ | ✅ (fs only, no fail) | — |
+| PR to main/staging | ✅ | ✅ | ✅ (fs only, no fail) | — |
+| `staging` | ✅ | ✅ | ✅ (image, fails on HIGH/CRITICAL) | **staging server** (if var set) |
+| `main` | ✅ | ✅ | ✅ (image, fails on HIGH/CRITICAL) | **production server** (if var set) |
+
 **Rollback** to a prior deploy: `./scripts/rollback.sh previous` — see `docs/rollback-setup.md`.
 
-**Discord alerts** (optional): see `docs/discord-alerts-setup.md` — use `docker-compose.discord-alerts.yml` overlay.
+**Discord alerts** (optional): see `docs/discord-alerts-setup.md` — prod uses `docker-compose.discord-alerts.yml` overlay with the real safeguarding channel; staging uses the webhook written to `secrets/discord_webhook_url_staging.txt` automatically.

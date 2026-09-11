@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Alertmanager — STAGING configuration.
+#
+# DIFFERS FROM PROD (alertmanager.yml) in the following ways:
+#   1. Safeguarding (severity=critical) alerts route to a Discord #staging-alerts
+#      TEST channel instead of the real on-call safeguarding channel.
+#   2. The webhook-logger test sink is still wired so every alert is visible in
+#      raw HTTP form for debugging during staging smoke tests.
+#   3. `resolve_timeout` is shorter (1m vs 5m) so staging alert lifecycle can be
+#      exercised quickly without waiting.
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  resolve_timeout: 1m
+  # ── Staging Discord webhook ──────────────────────────────────────────────
+  # Set in GitHub repo secrets as STAGING_DISCORD_WEBHOOK_URL, written onto
+  # the KNUST staging server at /opt/neps-infrastructure/secrets/discord_webhook_url_staging.txt
+  # before the stack first boots. If this file is missing, alertmanager will
+  # still route alerts to webhook-logger (below) so you can inspect them.
+  slack_api_url_file: /run/secrets/discord_webhook_url_staging
+
+route:
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 2h
+  receiver: webhook-logger-sink
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: staging-discord-critical
+      continue: true
+    - matchers:
+        - severity="warning"
+      receiver: staging-discord-warning
+      continue: true
+    - matchers:
+        - severity="info"
+      receiver: webhook-logger-sink
+
+receivers:
+  # ── Receivers for STAGING Discord ────────────────────────────────────────
+  - name: staging-discord-critical
+    discord_configs:
+      - webhook_url_file: /run/secrets/discord_webhook_url_staging
+        title: '⚠️ STAGING — CRITICAL: {{ .GroupLabels.alertname }}'
+        message: |
+          **Severity:** CRITICAL (staging environment)
+          **Service:** {{ .GroupLabels.service }}
+          **Instance:** {{ range .Alerts }}{{ .Labels.instance }} {{ end }}
+          **Summary:** {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ end }}
+          **Runbook:** {{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}
+          Do NOT page on-call — this is a staging alert.
+
+  - name: staging-discord-warning
+    discord_configs:
+      - webhook_url_file: /run/secrets/discord_webhook_url_staging
+        title: 'STAGING — WARNING: {{ .GroupLabels.alertname }}'
+        message: |
+          **Severity:** WARNING (staging environment)
+          **Service:** {{ .GroupLabels.service }}
+          **Summary:** {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ end }}
+
+  # ── Test sink — always-on, never pages anyone ────────────────────────────
+  # Captures every alert as raw JSON so DevOps can inspect payloads during
+  # staging smoke tests. Exposed on staging host port 18085 via compose overlay.
+  - name: webhook-logger-sink
+    webhook_configs:
+      - url: 'http://webhook-logger:8080/'
+        send_resolved: true
