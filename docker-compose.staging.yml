@@ -1,0 +1,254 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEPS Digital — Staging Overlay
+#
+# Runs the full stack in "staging mode" on the same host as production OR on
+# a dedicated staging VM. All containers, volumes, networks, secrets, and
+# ports are namespaced with the `neps-staging_` COMPOSE_PROJECT_NAME prefix so
+# nothing collides with the production `neps-infrastructure_` stack.
+#
+# ─── NAMESPACE RULES ───────────────────────────────────────────────────────
+# Every object created by this overlay gets a `neps-staging_` prefix because
+# COMPOSE_PROJECT_NAME is set. That guarantees isolation from production.
+#
+# ─── PORT CONVENTIONS (Staging = Prod port + 10000, avoid 80/443) ──────────
+#   Prod (host)   Staging (host)   Container  Service
+#   3000    →     13000            3000       neps-portal
+#   8000    →     18000            8000       neps-backend
+#   8001    →     18001            8000       neps-ml-ai
+#   5432    →     15432            5432       postgres
+#   6379    →     -                6379       redis (internal only)
+#   9090    →     19090            9090       prometheus
+#   9093    →     19093            9093       alertmanager
+#   9115    →     19115            9115       blackbox-exporter
+#   3001    →     13001            3000       grafana
+#   3100    →     13100            3100       loki
+#   8085    →     18085            8080       webhook-logger
+#   5050    →     15050            80         pgadmin
+#   9001    →     19001            9001       minio console
+#   80/443  →     18080/18443      80/443     nginx (so prod can hold :80/:443)
+#
+# ─── USAGE ─────────────────────────────────────────────────────────────────
+# Single-host staging + prod side-by-side (same KNUST VM):
+#
+#   # STAGING
+#   export COMPOSE_PROJECT_NAME=neps-staging
+#   export IMAGE_TAG=main
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.prod.yml \
+#                  -f docker-compose.staging.yml \
+#                  up -d
+#
+#   # PRODUCTION (in a separate shell or script):
+#   export COMPOSE_PROJECT_NAME=neps-infrastructure
+#   export IMAGE_TAG=main
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.prod.yml \
+#                  up -d
+#
+# Dedicated staging VM (separate physical host):
+#   export COMPOSE_PROJECT_NAME=neps-staging
+#   export IMAGE_TAG=staging
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.prod.yml \
+#                  -f docker-compose.staging.yml \
+#                  up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: neps-staging
+
+services:
+
+  # ─── Frontend ──────────────────────────────────────────────────────────────
+  neps-portal:
+    ports:
+      - "13000:3000"
+    environment:
+      - NEXTAUTH_URL=http://localhost:13000
+      - NEXT_PUBLIC_STAGING_BANNER=true
+
+  # ─── Backend ───────────────────────────────────────────────────────────────
+  neps-backend:
+    ports:
+      - "18000:8000"
+    environment:
+      - APP_ENV=staging
+      - REDCAP_MOCK_ENABLED=true
+      - REDCAP_API_URL=https://mock-redcap-service.onrender.com/api
+
+  # ─── ML/AI ─────────────────────────────────────────────────────────────────
+  neps-ml-ai:
+    ports:
+      - "18001:8000"
+    environment:
+      - APP_ENV=staging
+      - CORS_ALLOW_ORIGINS=http://localhost:13000,http://localhost:18000
+
+  # ─── Data Platform ─────────────────────────────────────────────────────────
+  neps-data-platform:
+    environment:
+      - APP_ENV=staging
+      - REDCAP_MOCK_ENABLED=true
+      - REDCAP_API_URL=https://mock-redcap-service.onrender.com
+
+  # ─── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    ports:
+      - "15432:5432"
+    volumes:
+      # Separate WAL + base archive directories for staging so PITR restore
+      # drills don't touch production backups.
+      - wal-archive-staging:/backup/pitr/wal
+      - base-archive-staging:/backup/pitr/base
+      - postgres-data-staging:/var/lib/postgresql/data
+
+  postgres-init:
+    volumes:
+      - wal-archive-staging:/backup/pitr/wal
+      - base-archive-staging:/backup/pitr/base
+
+  # ─── Monitoring Stack ──────────────────────────────────────────────────────
+  prometheus:
+    ports:
+      - "19090:9090"
+    volumes:
+      - prometheus-data-staging:/prometheus
+
+  alertmanager:
+    ports:
+      - "19093:9093"
+    volumes:
+      - ./monitoring/alertmanager.staging.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data-staging:/alertmanager
+    secrets:
+      - discord_webhook_url_staging
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+
+  webhook-logger:
+    ports:
+      - "18085:8080"
+
+  grafana:
+    ports:
+      - "13001:3000"
+    environment:
+      - GF_SERVER_ROOT_URL=http://localhost:13001
+    volumes:
+      - grafana-data-staging:/var/lib/grafana
+
+  loki:
+    ports:
+      - "13100:3100"
+    volumes:
+      - loki-data-staging:/loki
+
+  promtail:
+    volumes:
+      - promtail-data-staging:/var/lib/promtail
+
+  redis:
+    volumes:
+      - redis-data-staging:/data
+
+  redis-exporter: {}
+
+  blackbox-exporter:
+    ports:
+      - "19115:9115"
+
+  node-exporter: {}
+
+  postgres-exporter: {}
+
+  # ─── PgAdmin ───────────────────────────────────────────────────────────────
+  pgadmin:
+    ports:
+      - "15050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: staging-admin@neps.digital
+    volumes:
+      - pgadmin-data-staging:/var/lib/pgadmin
+
+  # ─── Nginx ─────────────────────────────────────────────────────────────────
+  # Staging nginx binds to non-privileged ports 18080/18443 so the production
+  # instance can own :80 and :443 on the same host.
+  nginx:
+    ports:
+      - "18080:80"
+      - "18443:443"
+    volumes:
+      - ./nginx/staging-nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+
+  # ─── Ofelia Scheduler ──────────────────────────────────────────────────────
+  # Ofelia operates by looking up containers by *name* inside the Docker daemon.
+  # Because the staging project prefix changes every container name to
+  # `neps-staging-<svc>-1`, the staging config.ini must reference the new names.
+  ofelia:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/ofelia/config.staging.ini:/etc/ofelia/config.ini:ro
+    command: daemon --config /etc/ofelia/config.ini
+
+  # ─── MinIO ─────────────────────────────────────────────────────────────────
+  minio:
+    ports:
+      - "19001:9001"
+    volumes:
+      - ./backups/staging-minio:/data
+
+volumes:
+  # All staging data volumes are declared here with explicit names so Compose
+  # doesn't try to reuse the production volumes (it would, without this, when
+  # docker-compose.staging.yml gets layered on top of docker-compose.yml
+  # because base-yml volumes only get project-prefixed if declared *without*
+  # explicit `name:`; we let the `name:` key from the base compose win so we
+  # override each staging volume below to be safely distinct).
+  postgres-data-staging:
+    name: neps-staging_postgres-data
+  wal-archive-staging:
+    name: neps-staging_wal-archive
+  base-archive-staging:
+    name: neps-staging_base-archive
+  grafana-data-staging:
+    name: neps-staging_grafana-data
+  prometheus-data-staging:
+    name: neps-staging_prometheus-data
+  redis-data-staging:
+    name: neps-staging_redis-data
+  alertmanager-data-staging:
+    name: neps-staging_alertmanager-data
+  loki-data-staging:
+    name: neps-staging_loki-data
+  promtail-data-staging:
+    name: neps-staging_promtail-data
+  pgadmin-data-staging:
+    name: neps-staging_pgadmin-data
+
+networks:
+  # Networks also pick up the `neps-staging_` name prefix automatically from
+  # the `name:` stanza at the top, but we redeclare them here with the
+  # `internal:` flag preserved so staging network isolation mirrors prod.
+  neps-public:
+    name: neps-staging_neps-public
+    driver: bridge
+  neps-internal:
+    name: neps-staging_neps-internal
+    driver: bridge
+    internal: true
+  neps-database:
+    name: neps-staging_neps-database
+    driver: bridge
+    internal: true
+  neps-monitoring:
+    name: neps-staging_neps-monitoring
+    driver: bridge
+
+# ─── Staging-only secrets ───────────────────────────────────────────────────
+# These are loaded by the staging Alertmanager instance only. The prod secrets
+# (postgres_user / postgres_password / app_secret_key / redcap_api_token)
+# continue to come from the base docker-compose.yml.
+secrets:
+  discord_webhook_url_staging:
+    file: ./secrets/discord_webhook_url_staging.txt
