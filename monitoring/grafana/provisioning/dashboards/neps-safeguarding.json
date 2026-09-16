@@ -1,0 +1,36 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Safeguarding Crisis Alerts Detected",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "targets": [{ "expr": "(sum(neps_monthly_reports{suicidality_screening=~\"Active plan|Recent attempt\"})) or vector(0)", "refId": "A" }]
+    },
+    {
+      "title": "Distress Escalation Rate (5m)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "targets": [{ "expr": "(sum(rate(neps_distress_escalations_total[5m]))) or vector(0)", "refId": "A" }]
+    },
+    {
+      "title": "Distress Escalations Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
+      "targets": [{ "expr": "rate(neps_distress_escalations_total[5m]) or vector(0)", "refId": "A" }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["safeguarding", "clinical", "neps"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "NEPS Safeguarding & Clinical Crisis Dashboard",
+  "uid": "neps-safeguarding-dash"
+}

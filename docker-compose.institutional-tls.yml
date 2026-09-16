@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEPS Digital — Institutional TLS Overlay (docker-compose.institutional-tls.yml)
+#
+# Replaces Certbot auto-issuance with pre-issued KNUST/institutional CA
+# TLS certificate and private key mounted from Docker secrets or host files.
+#
+# Certificate paths mounted into Nginx container:
+#   /etc/nginx/ssl/fullchain.pem
+#   /etc/nginx/ssl/privkey.pem
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.prod.yml \
+#                  -f docker-compose.institutional-tls.yml \
+#                  up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # Disable Certbot when using institutional CA certs
+  certbot:
+    profiles:
+      - donotstart
+
+  nginx:
+    secrets:
+      - knust_cert
+      - knust_key
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./secrets/knust_cert.pem:/etc/nginx/ssl/fullchain.pem:ro
+      - ./secrets/knust_key.pem:/etc/nginx/ssl/privkey.pem:ro
+
+secrets:
+  knust_cert:
+    file: ./secrets/knust_cert.pem
+  knust_key:
+    file: ./secrets/knust_key.pem

@@ -1,36 +1,52 @@
 global:
   resolve_timeout: 5m
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alerts@neps.digital'
+  smtp_auth_username: 'alerts@neps.digital'
+  smtp_auth_password_file: '/run/secrets/smtp_password'
+  smtp_require_tls: true
 
 route:
   group_by: ['alertname', 'cluster', 'service']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
-  receiver: 'primary-alerts'
+  receiver: 'production-alerts'
 
   routes:
-    # Safeguarding alerts — notify immediately
+    # Safeguarding critical alerts — notify immediately
     - matchers:
         - severity="critical"
         - team="safeguarding"
       group_wait: 0s
-      receiver: 'primary-alerts'
+      receiver: 'safeguarding-immediate'
 
     - matchers:
         - severity="critical"
-      receiver: 'primary-alerts'
+      receiver: 'production-alerts'
 
     - matchers:
         - severity="warning"
-      receiver: 'primary-alerts'
+      receiver: 'production-alerts'
 
 receivers:
-  - name: 'primary-alerts'
-    webhook_configs:
-      - url: 'http://webhook-logger:8080/'
-        send_resolved: true
+  - name: 'production-alerts'
     discord_configs:
-      - webhook_url: 'https://discord.com/api/webhooks/1512576953113378828/R05PLkf5mNO6tjx2VqY3L_tUVNGkghCXKxAQgVDSGyjgpyfVV3-GnVnEWLSVHXsioSM4'
+      - webhook_url_file: /run/secrets/discord_webhook_url
+        send_resolved: true
+        username: 'NEPS Alerts'
+    email_configs:
+      - to: 'devops@neps.digital'
+        send_resolved: true
+
+  - name: 'safeguarding-immediate'
+    discord_configs:
+      - webhook_url_file: /run/secrets/discord_webhook_url
+        send_resolved: true
+        username: 'NEPS Safeguarding On-Call'
+        title: '🚨 CRISIS SAFEGUARDING ALERT: {{ .GroupLabels.alertname }}'
+    email_configs:
+      - to: 'safeguarding-oncall@neps.digital'
         send_resolved: true
 
 inhibit_rules:

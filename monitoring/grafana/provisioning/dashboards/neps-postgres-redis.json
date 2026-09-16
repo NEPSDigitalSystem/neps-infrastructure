@@ -1,0 +1,48 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "PostgreSQL Up",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "pg_up", "refId": "A" }]
+    },
+    {
+      "title": "PostgreSQL Active Connections",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "pg_stat_activity_count", "refId": "A" }]
+    },
+    {
+      "title": "Redis Up",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "redis_up", "refId": "A" }]
+    },
+    {
+      "title": "Redis Used Memory (Bytes)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "redis_memory_used_bytes", "refId": "A" }]
+    },
+    {
+      "title": "Redis Memory Usage Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
+      "targets": [{ "expr": "redis_memory_used_bytes", "refId": "A" }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["database", "postgres", "redis", "neps"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "PostgreSQL & Redis Dashboard",
+  "uid": "neps-postgres-redis-dash"
+}
