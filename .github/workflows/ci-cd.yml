@@ -140,7 +140,7 @@ jobs:
           exit-code: '1'
 
       - name: Upload Results
-        uses: github/codeql-action/upload-sarif@v4.37.9
+        uses: github/codeql-action/upload-sarif@v4.38.0
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
@@ -151,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Deploy full stack to STAGING server
         uses: appleboy/ssh-action@v1.2.5
@@ -190,7 +190,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Deploy full stack to PRODUCTION server
         uses: appleboy/ssh-action@v1.2.5
