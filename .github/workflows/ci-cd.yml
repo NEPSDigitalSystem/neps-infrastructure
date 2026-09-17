@@ -89,11 +89,28 @@ jobs:
         run: |
           if [ -f nginx/nginx.conf ]; then
             docker run --rm \
+              --add-host neps-portal:127.0.0.1 \
+              --add-host neps-backend:127.0.0.1 \
+              --add-host neps-ml-ai:127.0.0.1 \
+              --add-host neps-data-platform:127.0.0.1 \
               -v $(pwd)/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
               -v $(pwd)/nginx/ssl:/etc/nginx/ssl:ro \
               nginx:alpine nginx -t
             echo "✓ Nginx SSL configuration syntax validated"
           fi
+
+          if [ -f nginx/staging-nginx.conf ]; then
+            docker run --rm \
+              --add-host neps-portal:127.0.0.1 \
+              --add-host neps-backend:127.0.0.1 \
+              --add-host neps-ml-ai:127.0.0.1 \
+              --add-host neps-data-platform:127.0.0.1 \
+              -v $(pwd)/nginx/staging-nginx.conf:/etc/nginx/nginx.conf:ro \
+              -v $(pwd)/nginx/ssl:/etc/nginx/ssl:ro \
+              nginx:alpine nginx -t
+            echo "✓ Staging Nginx SSL configuration syntax validated"
+          fi
+
 
 
       - name: Check Scripts
