@@ -39,6 +39,7 @@ services:
       - DATABASE_HOST=postgres
       - DATABASE_USER_FILE=/run/secrets/postgres_user
       - DATABASE_PASSWORD_FILE=/run/secrets/postgres_password
+      - DATABASE_SSL_MODE=require
       - REDCAP_MOCK_ENABLED=true
       - REDCAP_API_URL=https://mock-redcap-service.onrender.com/api
       - REDCAP_API_TOKEN_FILE=/run/secrets/redcap_api_token
@@ -98,7 +99,7 @@ services:
     # Run migrations then full sync on each startup (idempotent)
     # Points directly at the hosted mock REDCap on Render — no backend proxy needed.
     command: >
-      sh -c "export DATABASE_URL=postgresql://neps:$$(cat /run/secrets/postgres_password)@postgres:5432/neps_db && python -m etl.main migrate && sleep infinity"
+      sh -c "export DATABASE_URL=postgresql://neps:$$(cat /run/secrets/postgres_password)@postgres:5432/neps_db?sslmode=require && python -m etl.main migrate && sleep infinity"
     environment:
       - REDCAP_API_URL=https://mock-redcap-service.onrender.com
       - REDCAP_MOCK_ENABLED=true
@@ -121,10 +122,23 @@ services:
   postgres-init:
     image: postgres:15-alpine
     user: root
-    command: chown -R 70:70 /backup/pitr/wal /backup/pitr/base
+    command: >
+      sh -c "
+        mkdir -p /backup/pitr/wal /backup/pitr/base /var/lib/postgresql/ssl &&
+        chown -R 70:70 /backup/pitr/wal /backup/pitr/base /var/lib/postgresql/ssl &&
+        if [ ! -f /var/lib/postgresql/ssl/server.key ]; then
+          openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout /var/lib/postgresql/ssl/server.key \
+            -out /var/lib/postgresql/ssl/server.crt \
+            -subj '/CN=postgres' 2>/dev/null &&
+          chown 70:70 /var/lib/postgresql/ssl/server.key /var/lib/postgresql/ssl/server.crt &&
+          chmod 600 /var/lib/postgresql/ssl/server.key
+        fi
+      "
     volumes:
       - wal-archive:/backup/pitr/wal
       - base-archive:/backup/pitr/base
+      - postgres-ssl:/var/lib/postgresql/ssl
     networks:
       - neps-database
 
@@ -147,6 +161,12 @@ services:
       - "archive_command=test ! -f /backup/pitr/wal/%f && cp %p /backup/pitr/wal/%f"
       - -c
       - archive_timeout=60
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/ssl/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/ssl/server.key
     depends_on:
       postgres-init:
         condition: service_completed_successfully
@@ -154,6 +174,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - wal-archive:/backup/pitr/wal
       - base-archive:/backup/pitr/base
+      - postgres-ssl:/var/lib/postgresql/ssl
       - ./scripts:/backup/scripts:ro
     ports:
       - "5432:5432"
@@ -223,11 +244,12 @@ services:
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager-data:/alertmanager
+    secrets:
+      - discord_webhook_url
+      - smtp_password
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
-    depends_on:
-      - webhook-logger
     networks:
       - neps-internal
       - neps-monitoring
@@ -297,7 +319,7 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     environment:
-      DATA_SOURCE_URI: "postgres:5432/neps_db?sslmode=disable"
+      DATA_SOURCE_URI: "postgres:5432/neps_db?sslmode=require"
       DATA_SOURCE_USER: "neps"
       DATA_SOURCE_PASS_FILE: "/run/secrets/postgres_password"
     secrets:
@@ -369,6 +391,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+      - certbot-webroot:/var/www/certbot:ro
     depends_on:
       - neps-portal
       - neps-backend
@@ -377,6 +400,22 @@ services:
     networks:
       - neps-public
       - neps-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate --quiet --tries=1 --spider https://localhost/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./nginx/ssl:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while true; do certbot renew --webroot -w /var/www/certbot --quiet; nginx -s reload 2>/dev/null || true; sleep 12h & wait $${!}; done'"
+    networks:
+      - neps-public
     security_opt:
       - no-new-privileges:true
 
@@ -427,6 +466,7 @@ networks:
 
 volumes:
   postgres-data:
+  postgres-ssl:
   wal-archive:
   base-archive:
   grafana-data:
@@ -436,6 +476,7 @@ volumes:
   loki-data:
   promtail-data:
   pgadmin-data:
+  certbot-webroot:
 
 secrets:
   postgres_user:
@@ -446,3 +487,7 @@ secrets:
     file: ./secrets/app_secret_key.txt
   redcap_api_token:
     file: ./secrets/redcap_api_token.txt
+  discord_webhook_url:
+    file: ./secrets/discord_webhook_url.txt
+  smtp_password:
+    file: ./secrets/smtp_password.txt

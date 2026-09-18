@@ -1,0 +1,42 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "NEPS Backend Status",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=\"neps-backend\"}", "refId": "A" }]
+    },
+    {
+      "title": "HTTP Request Rate (5m)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "targets": [{ "expr": "sum(rate(http_requests_total{job=\"neps-backend\"}[5m]))", "refId": "A" }]
+    },
+    {
+      "title": "5xx Error Ratio",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "targets": [{ "expr": "(sum(rate(http_requests_total{job=\"neps-backend\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"neps-backend\"}[5m]))) or vector(0)", "refId": "A" }]
+    },
+    {
+      "title": "p95 Latency (Seconds)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"neps-backend\"}[5m])) by (le)) or vector(0)", "refId": "A" }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["backend", "neps"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "NEPS Backend Dashboard",
+  "uid": "neps-backend-dash"
+}

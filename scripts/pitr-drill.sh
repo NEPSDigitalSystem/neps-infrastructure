@@ -24,6 +24,10 @@ DRILL_PORT=5433          # Separate port — never conflicts with live postgres:
 DRILL_VOLUME="neps-pitr-drill-vol"
 LOG_FILE="$INFRA_DIR/backups/pitr-drill-$(date +%Y%m%d_%H%M%S).log"
 
+# Project name: honours COMPOSE_PROJECT_NAME so staging (neps-staging) and
+# production (neps-infrastructure) resolve different container names.
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-neps-infrastructure}"
+
 # ── Colours ────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 
@@ -55,14 +59,18 @@ echo "" | tee -a "$LOG_FILE"
 # ── Step 1: Pre-flight checks ───────────────────────────────────────────────
 info "[1/8] Pre-flight checks..."
 
-# Confirm live postgres is up
-if ! docker ps --filter "name=neps-infrastructure-postgres-1" --filter "status=running" -q | grep -q .; then
-    # Try alternate project-name styles
+# Confirm live postgres is up.
+# Try the project-namespaced container name first (e.g. neps-staging-postgres-1),
+# then fall back to any running container whose name contains "postgres".
+PG_CONTAINER_PATTERN="${PROJECT_NAME}-postgres"
+if ! docker ps --filter "name=${PG_CONTAINER_PATTERN}" --filter "status=running" -q | grep -q .; then
+    # Alternate: docker compose may use <project>-postgres-1 or <project>_postgres_1
     if ! docker ps --filter "name=postgres" --filter "status=running" -q | grep -q .; then
-        fail "Live postgres container is not running. Is the stack up? Run: docker compose up -d postgres"
+        fail "Live postgres container is not running (looked for '${PG_CONTAINER_PATTERN}*'). Is the stack up? Run: docker compose up -d postgres"
     fi
+    warn "Could not find '${PG_CONTAINER_PATTERN}*' — using first available postgres container"
 fi
-success "Live postgres is running"
+success "Live postgres is running (project: ${PROJECT_NAME})"
 
 # Find base backup
 LATEST_BASE=$(ls -t "$BACKUP_DIR/base/" 2>/dev/null | grep "^base_" | head -1 || true)

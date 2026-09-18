@@ -1,0 +1,39 @@
+name: NEPS Automated PITR Drill (Staging)
+
+on:
+  schedule:
+    # Run every Sunday at 03:00 UTC on staging
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  pitr-drill:
+    if: vars.STAGING_DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Execute PITR Drill on STAGING server via SSH
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.STAGING_DEPLOY_HOST }}
+          username: ${{ secrets.STAGING_DEPLOY_USER }}
+          key: ${{ secrets.STAGING_DEPLOY_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/neps-infrastructure
+
+            echo "Starting automated PITR restore drill on staging at $(date -u)..."
+            
+            export COMPOSE_PROJECT_NAME=neps-staging
+            if ./scripts/pitr-drill.sh; then
+              STATUS="SUCCESS"
+              LOG_ENTRY="$(date -u +"%Y-%m-%dT%H:%M:%SZ"),neps-staging,PITR_DRILL,PASSED"
+            else
+              STATUS="FAILED"
+              LOG_ENTRY="$(date -u +"%Y-%m-%dT%H:%M:%SZ"),neps-staging,PITR_DRILL,FAILED"
+              echo "$LOG_ENTRY" >> .pitr-drill-history
+              exit 1
+            fi
+
+            echo "$LOG_ENTRY" >> .pitr-drill-history
+            echo "✓ PITR restore drill completed with status: ${STATUS}"

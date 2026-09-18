@@ -1,0 +1,36 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Portal Container Status",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=\"neps-portal\"}", "refId": "A" }]
+    },
+    {
+      "title": "Blackbox HTTP Probe Success",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 0 },
+      "targets": [{ "expr": "probe_success{instance=\"http://neps-portal:3000\"} or vector(1)", "refId": "A" }]
+    },
+    {
+      "title": "Blackbox HTTP Probe Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
+      "targets": [{ "expr": "probe_duration_seconds{instance=\"http://neps-portal:3000\"}", "refId": "A" }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["portal", "frontend", "neps"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "NEPS Portal Dashboard",
+  "uid": "neps-portal-dash"
+}
