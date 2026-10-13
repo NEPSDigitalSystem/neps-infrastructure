@@ -101,12 +101,18 @@ services:
     command: >
       sh -c "export DATABASE_URL=postgresql://neps:$$(cat /run/secrets/postgres_password)@postgres:5432/neps_db?sslmode=require && python -m etl.main migrate && sleep infinity"
     environment:
-      - REDCAP_API_URL=https://mock-redcap-service.onrender.com
-      - REDCAP_MOCK_ENABLED=true
-      - REDCAP_PROJECT_ID=NEPS-2025
-      - APP_ENV=development
+      - REDCAP_API_URL=${REDCAP_API_URL:-https://mock-redcap-service.onrender.com}
+      - REDCAP_API_TOKEN_FILE=/run/secrets/redcap_api_token
+      - REDCAP_MOCK_ENABLED=${REDCAP_MOCK_ENABLED:-true}
+      - REDCAP_PROJECT_ID=${REDCAP_PROJECT_ID:-NEPS-2025}
+      - SOURCE_INTAKE_ENABLED=${SOURCE_INTAKE_ENABLED:-false}
+      - SOURCE_DESTINATION=${SOURCE_DESTINATION:-ghana_knust_primary}
+      - SOURCE_SERVICE_IDENTITY=${SOURCE_SERVICE_IDENTITY:-data-platform-collector}
+      - SOURCE_EVENT_MODE=${SOURCE_EVENT_MODE:-auto}
+      - APP_ENV=${APP_ENV:-development}
     secrets:
       - postgres_password
+      - redcap_api_token
     depends_on:
       - postgres
     networks:
