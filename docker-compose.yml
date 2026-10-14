@@ -130,13 +130,11 @@ services:
     user: root
     command: >
       sh -c "
+        apk add --no-cache openssl &&
         mkdir -p /backup/pitr/wal /backup/pitr/base /var/lib/postgresql/ssl &&
         chown -R 70:70 /backup/pitr/wal /backup/pitr/base /var/lib/postgresql/ssl &&
         if [ ! -f /var/lib/postgresql/ssl/server.key ]; then
-          openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-            -keyout /var/lib/postgresql/ssl/server.key \
-            -out /var/lib/postgresql/ssl/server.crt \
-            -subj '/CN=postgres' 2>/dev/null &&
+          openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout /var/lib/postgresql/ssl/server.key -out /var/lib/postgresql/ssl/server.crt -subj '/CN=postgres' &&
           chown 70:70 /var/lib/postgresql/ssl/server.key /var/lib/postgresql/ssl/server.crt &&
           chmod 600 /var/lib/postgresql/ssl/server.key
         fi
@@ -147,6 +145,7 @@ services:
       - postgres-ssl:/var/lib/postgresql/ssl
     networks:
       - neps-database
+      - neps-public
 
   postgres:
     image: postgres:15-alpine
