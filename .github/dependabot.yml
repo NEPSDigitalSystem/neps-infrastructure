@@ -1,18 +1,37 @@
 version: 2
 updates:
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci-cd"
     groups:
       github-actions:
         patterns:
           - "*"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+
+  # Docker base images
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
     groups:
-      docker:
+      docker-base:
         patterns:
           - "*"
+    commit-message:
+      prefix: "chore(docker)"
+      include: "scope"
